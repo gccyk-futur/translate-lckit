@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Xcode / xcodegen（工程文件由 project.yml 生成，不入库）
+build/
+build-appstore/
+DerivedData/
+TLKit.xcodeproj/
+*.xcuserstate
+*.xcuserdata/
+xcuserdata/
+*.xcactivitylog
+
+# 本地记忆（WorkBuddy 会话状态，不入库）
+.workbuddy/memory/

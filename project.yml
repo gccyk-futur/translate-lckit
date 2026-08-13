@@ -1,0 +1,70 @@
+name: TLKit
+options:
+  bundleIdPrefix: me.ckai
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEVELOPMENT_LANGUAGE: zh-Hans
+    ARCHS: "arm64 x86_64"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ${TLKIT_TEAM_ID}
+    PRODUCT_BUNDLE_IDENTIFIER: me.ckai.translate
+    INFOPLIST_FILE: Sources/TLKit/Resources/Info.plist
+    GENERATE_INFOPLIST_FILE: false
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+  configs:
+    Debug:
+      ENABLE_HARDENED_RUNTIME: false
+    Release:
+      ENABLE_HARDENED_RUNTIME: true
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: "Developer ID Application: $(TLKIT_SIGNING_NAME) ($(TLKIT_TEAM_ID))"
+      # 直装版（Developer ID 分发）不含沙盒：CGEvent 事件投递（模拟 ⌘C）需要。
+      # App Store 构建由 build-appstore.sh 通过 CODE_SIGN_ENTITLEMENTS 覆盖为含沙盒的 TLKit.entitlements，
+      # 并追加 SWIFT_ACTIVE_COMPILATION_CONDITIONS=APP_STORE 编译宏。
+      CODE_SIGN_ENTITLEMENTS: Sources/TLKit/Resources/TLKit-Direct.entitlements
+      OTHER_CODE_SIGN_FLAGS: "--timestamp --options=runtime"
+targets:
+  TLKit:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/TLKit
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/*.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: TLKit
+  TLKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    # 纯逻辑单测：把被测文件直接编进测试目标，
+    # 不挂 app 宿主，避免 SwiftUI @main 与 XCTest 重复创建 NSApplication。
+    sources:
+      - path: Tests/TLKitTests
+      - path: Sources/TLKit/Translation/BaiduTranslator.swift
+      - path: Sources/TLKit/Translation/TranslationService.swift
+      - path: Sources/TLKit/Translation/OpenAICompatibleTranslator.swift
+      - path: Sources/TLKit/History/HistoryStore.swift
+      - path: Sources/TLKit/Support/ConfigStore.swift
+      - path: Sources/TLKit/Support/AppearanceManager.swift
+      - path: Sources/TLKit/Support/KeychainStore.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.ckai.TLKitTests
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: ""
+schemes:
+  TLKit:
+    build:
+      targets:
+        TLKit: all
+    test:
+      targets:
+        - TLKitTests
