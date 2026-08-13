@@ -45,4 +45,5 @@ TLKit 请求以下系统权限，全部用于核心功能：
 如有隐私相关问题：
 
 - 信箱：tlkit@ckai.me
-- 网站：ckai.me/tlkit
+- 支持：https://ckai.me/tlkit/support.html
+- 隐私政策（线上版）：https://ckai.me/tlkit/privacy.html

@@ -531,7 +531,8 @@ struct SettingsView: View {
 
             Section("联系") {
                 Link("tlkit@ckai.me", destination: URL(string: "mailto:tlkit@ckai.me")!)
-                Link("ckai.me/tlkit", destination: URL(string: "https://ckai.me/tlkit")!)
+                Link("支持与帮助", destination: URL(string: "https://ckai.me/tlkit/support.html")!)
+                Link("隐私政策", destination: URL(string: "https://ckai.me/tlkit/privacy.html")!)
             }
         }
         .formStyle(.grouped)
