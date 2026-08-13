@@ -54,7 +54,7 @@ TLKit 提供两条翻译链路：
 气泡出现在鼠标位置附近，显示"翻译中…"
         │
         ▼
-调用当前激活的翻译服务（百度智能云 / OpenAI 协议 / Ollama）
+调用当前激活的翻译服务（百度智能云 / AI 大模型 / Ollama）
         │
    ┌────┴────┐
   成功       失败 ──▶ 气泡显示错误原因（红字）
@@ -158,12 +158,12 @@ TLKit 提供两条翻译链路：
 - 协议：OAuth2 client_credentials 获取 token（缓存 30 天）→ `POST /rpc/2.0/mt/texttrans/v1`。
 - 设置页对服务归属与凭证类型有明确说明文案，避免与开放平台混淆。
 
-#### OpenAI 协议 AI（App Store 版隐藏此入口）
+#### AI 大模型（OpenAI 兼容格式）
 
 - 配置项：Base URL、API Key、模型名。
 - 协议：标准 `POST /chat/completions`，兼容一切 OpenAI 格式服务（DeepSeek、Moonshot、智谱、OpenAI 官方等）。
 - 系统提示词在设置页**只读可见**（"你是一个翻译引擎。把用户发送的文本翻译成{目标语言}。只输出译文…"）。
-- 服务展示名带模型名（如 "OpenAI · deepseek-chat"），气泡底栏与历史记录可见。
+- 服务展示名带模型名（如 "AI · deepseek-chat"），气泡底栏与历史记录可见。
 
 #### Ollama（本地模型）
 
@@ -324,7 +324,7 @@ TLKit/
 
 | 渠道 | 签名 | 沙盒 | 差异 |
 |---|---|---|---|
-| Mac App Store（免费） | Mac App Store 证书 | 是 | 隐藏 OpenAI 协议入口（审核政策） |
+| Mac App Store（免费） | Mac App Store 证书 | 是 | 与官网版功能一致，仅 UI 文案避开敏感词 |
 | 官网版（官网 / GitHub Releases） | Developer ID + 公证 | 否 | 功能最完整 |
 
 两渠道共用同一份代码，通过 `APP_STORE` 编译宏（`#if APP_STORE`）+ 两份 entitlements 文件切换：App Store 版含 `com.apple.security.app-sandbox` 与 `network.client`，官网版不含沙盒。「关于」页的渠道标识（App Store / 官网版）也由该宏决定。

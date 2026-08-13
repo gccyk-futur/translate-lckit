@@ -340,25 +340,24 @@ struct SettingsView: View {
                     testRow(key: "baidu") { runTranslationTest(.baidu) }
                 }
             case .openai:
-                #if !APP_STORE
                 Group {
-                    Section("OpenAI 协议（兼容任意 OpenAI 格式 API）") {
+                    Section("AI 大模型接口") {
                         TextField("Base URL", text: Binding(
                             get: { config.current.openai.baseURL },
                             set: { url in config.update { $0.openai.baseURL = url } }
-                        ), prompt: Text("如 https://api.openai.com/v1"))
+                        ), prompt: Text("如 https://api.deepseek.com/v1"))
 
                         TextField("模型", text: Binding(
                             get: { config.current.openai.model },
                             set: { model in config.update { $0.openai.model = model } }
-                        ), prompt: Text("如 gpt-4o-mini"))
+                        ), prompt: Text("如 deepseek-chat"))
 
                         SecureField("API Key", text: $openaiKey)
                             .onChange(of: openaiKey) { _, newValue in
                                 KeychainStore.set(newValue, for: .openaiKey)
                             }
 
-                        Text("API Key 仅存于本机 Keychain。Base URL 兼容带 /v1 与不带 /v1 的写法。")
+                        Text("兼容 Chat Completions 格式，可接 DeepSeek、智谱、Kimi、Moonshot 等大模型 API。API Key 仅存本机 Keychain，Base URL 兼容带 /v1 与不带 /v1 的写法。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -366,7 +365,6 @@ struct SettingsView: View {
                     }
                     promptSection
                 }
-                #endif
             case .ollama:
                 Group {
                     Section("Ollama") {

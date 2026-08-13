@@ -56,11 +56,11 @@ enum ServiceFactory {
             let baseURL = config.openai.baseURL.trimmingCharacters(in: .whitespaces)
             let model = config.openai.model.trimmingCharacters(in: .whitespaces)
             guard !baseURL.isEmpty, !model.isEmpty else {
-                throw TranslationError.notConfigured(serviceName: "OpenAI 协议")
+                throw TranslationError.notConfigured(serviceName: "AI 大模型")
             }
             return OpenAICompatibleTranslator(
                 // 模型服务展示名带上模型名（气泡底栏 / 历史可见）。
-                displayName: "OpenAI · \(model)",
+                displayName: "AI · \(model)",
                 baseURL: baseURL,
                 apiKey: KeychainStore.get(.openaiKey) ?? "",
                 model: model

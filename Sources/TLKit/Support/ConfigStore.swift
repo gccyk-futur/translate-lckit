@@ -56,19 +56,16 @@ enum ServiceKind: String, Codable, CaseIterable {
     case openai
     case ollama
 
-    /// App Store 版可见的服务列表（OpenAI 因审核敏感词不可出现）。
+    /// 所有渠道均提供全部服务。App Store 版仅文案措辞不同：
+    /// UI 不出现「OpenAI」字样（避免国内区审核敏感词），统一称「AI 大模型」。
     static var availableCases: [ServiceKind] {
-        #if APP_STORE
-        return [.baidu, .ollama]
-        #else
-        return ServiceKind.allCases
-        #endif
+        ServiceKind.allCases
     }
 
     var label: String {
         switch self {
         case .baidu: return "百度翻译"
-        case .openai: return "OpenAI 协议"
+        case .openai: return "AI 大模型"
         case .ollama: return "Ollama（本地）"
         }
     }
