@@ -1,0 +1,63 @@
+name: Bug 报告
+description: 提交一个问题报告，帮助改进 TLKit
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。提交前请先搜一下已有 issue，避免重复。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 描述你遇到的问题
+      placeholder: 例如：划词后气泡一直显示"翻译中…"，没有结果
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 怎么操作能复现这个问题
+      placeholder: |
+        1. 选中一段文字
+        2. 按 ⌥D
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望发生什么
+  - type: input
+    id: version
+    attributes:
+      label: TLKit 版本
+      placeholder: 如 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: channel
+    attributes:
+      label: 渠道
+      description: App Store 版还是官网版
+      placeholder: 官网版
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: macOS 版本、芯片（Intel / Apple Silicon）
+      placeholder: macOS 15.0，Apple Silicon
+  - type: input
+    id: service
+    attributes:
+      label: 翻译服务
+      description: 用的是哪个服务、模型（不要贴 API Key）
+      placeholder: AI 大模型 / deepseek-chat
+  - type: textarea
+    id: logs
+    attributes:
+      label: 截图或日志
+      description: 如有截图或控制台日志，贴上来

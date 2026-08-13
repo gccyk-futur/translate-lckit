@@ -1,0 +1,31 @@
+name: 功能建议
+description: 提一个改进或新功能的建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        说明一下：这工具主要作者自用，更新跟着自己的需求走，有些建议可能不会做。但欢迎提，会认真看。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你要解决什么问题
+      description: 描述你遇到的实际场景或痛点
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 你期望的方案
+      description: 你希望 TLKit 怎么做
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 有没有其他办法能解决
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 其他想说的

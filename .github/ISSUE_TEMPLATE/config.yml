@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 隐私说明
+    url: https://github.com/gccyk-futur/translate-lckit/blob/main/PRIVACY.md
+    about: 隐私相关的问题请先看这里
