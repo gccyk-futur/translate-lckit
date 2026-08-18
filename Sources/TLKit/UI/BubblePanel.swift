@@ -50,28 +50,45 @@ final class BubblePanelController {
     private var keyMonitor: Any?
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
+    /// 当前展示的状态（空格键朗读原文需要取其中的 source）。
+    private var currentState: BubbleState?
     private var hovering = false
 
     /// 气泡内朗读按钮回调（由 TranslationController 注入）。
     var onSpeakRequest: ((String) -> Void)?
     /// 气泡「详细对照」回调（由 TranslationController 注入）。
     var onDetailedRequest: ((String) -> Void)?
+    /// 错误态「翻译设置…」回调（由 TranslationController 注入）。
+    var onOpenSettingsRequest: (() -> Void)?
+    /// 权限态「不再提醒」回调（由 TranslationController 注入）。
+    var onPermissionNeverRemind: (() -> Void)?
 
     private let panelWidth: CGFloat = TLStyle.bubbleWidth
     private let maxHeight: CGFloat = 400
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// 预热：启动时建好面板与 SwiftUI 视图，首次呼出免构建开销。
+    func prewarm() {
+        if panel == nil { buildPanel() }
+    }
+
     // MARK: - 展示 / 关闭
 
     func show(_ state: BubbleState, at mouseTopLeft: CGPoint) {
         if panel == nil { buildPanel() }
+        currentState = state
         hosting?.rootView = BubbleView(state: state, onOpenAccessibility: {
             PermissionGate.openAccessibilitySettings()
         }, onSpeak: { [weak self] text in
             MainActor.assumeIsolated { self?.onSpeakRequest?(text) }
         }, onOpenDetailed: { [weak self] text in
             MainActor.assumeIsolated { self?.onDetailedRequest?(text) }
+        }, onOpenSettings: { [weak self] in
+            MainActor.assumeIsolated { self?.onOpenSettingsRequest?() }
+        }, onNeverRemindPermission: { [weak self] in
+            MainActor.assumeIsolated { self?.onPermissionNeverRemind?() }
         })
         layoutAndPosition(at: mouseTopLeft)
         panel?.orderFrontRegardless()
@@ -83,6 +100,7 @@ final class BubblePanelController {
     func dismiss() {
         hideTask?.cancel()
         hideTask = nil
+        currentState = nil
         removeMonitors()
         SpeechManager.shared.stop()
         panel?.orderOut(nil)
@@ -117,6 +135,8 @@ final class BubblePanelController {
         effect.layer?.masksToBounds = true
 
         let hosting = NSHostingView(rootView: BubbleView(state: .noSelection))
+        // 隐藏标题栏仍会向 SwiftUI 下发安全区（造成上部大空白），这里彻底关掉。
+        hosting.safeAreaRegions = []
         hosting.translatesAutoresizingMaskIntoConstraints = false
         effect.addSubview(hosting)
         NSLayoutConstraint.activate([
@@ -134,6 +154,14 @@ final class BubblePanelController {
 
         self.panel = panel
         self.hosting = hosting
+
+        // 失焦即关：气泡让出键盘焦点（点击/⌘Tab 到别处）即关闭。
+        // 与倒计时自动消失互不干扰：dismiss 内部会取消 hideTask。
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: panel, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.dismiss() }
+        }
     }
 
     // MARK: - 布局与定位
@@ -182,9 +210,10 @@ final class BubblePanelController {
         switch state {
         case .result:
             seconds = ConfigStore.shared.current.autoDismissSeconds
-        case .error, .noSelection:
+        case .noSelection:
             seconds = 2
-        case .loading, .permissionNeeded:
+        case .error, .loading, .permissionNeeded:
+            // 错误要留够时间阅读并点「翻译设置…」，不自动消失。
             seconds = 0
         }
         guard seconds > 0 else { return }
@@ -207,8 +236,23 @@ final class BubblePanelController {
         removeMonitors()
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { // Esc
+            // Esc / ⌘W 关闭
+            if event.keyCode == 53 || (event.modifierFlags.contains(.command) && event.keyCode == 13) {
                 MainActor.assumeIsolated { self?.dismiss() }
+                return nil
+            }
+            // 空格：朗读原文（等同气泡内的小喇叭按钮）。
+            if event.keyCode == 49 {
+                // 只把 String? 取出隔离域；NSEvent 不可跨隔离传递（非 Sendable）。
+                let text: String? = MainActor.assumeIsolated {
+                    switch self?.currentState {
+                    case .loading(let source): return source
+                    case .result(let source, _, _, _): return source
+                    default: return nil
+                    }
+                }
+                guard let text, !text.isEmpty else { return event }
+                MainActor.assumeIsolated { self?.onSpeakRequest?(text) }
                 return nil
             }
             return event

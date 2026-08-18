@@ -45,6 +45,11 @@ enum ServiceFactory {
     static func make(_ kind: ServiceKind) throws -> TranslationService {
         let config = ConfigStore.shared.current
         switch kind {
+        case .system:
+            if #available(macOS 26.0, *) {
+                return SystemTranslator()
+            }
+            throw TranslationError.notAvailable(description: "系统翻译需要 macOS 26 及以上版本，请改用百度翻译或大模型服务")
         case .baidu:
             let apiKey = config.baidu.apiKey.trimmingCharacters(in: .whitespaces)
             let secret = (KeychainStore.get(.baiduSecret) ?? "").trimmingCharacters(in: .whitespaces)

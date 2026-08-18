@@ -22,20 +22,38 @@ struct SentencePair: Identifiable, Equatable {
 /// - Esc 关闭、⌘+Enter 翻译
 /// - 屏幕居中
 @MainActor
-final class InputPanelController: ObservableObject {
+final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = InputPanelController()
 
     private var panel: NSPanel?
     private var hosting: NSHostingView<InputPanelView>?
     private var keyMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
     /// 面板弹出前的前台应用；关闭时归还焦点。
     private var previousApp: NSRunningApplication?
 
     @Published var inputText = ""
     @Published var resultText = ""
-    @Published var direction: TranslationDirection = ConfigStore.shared.current.defaultDirection
+    /// 目标语言：跟随配置初始化；用户改动后写回配置，重启后保留。
+    @Published var targetLanguage: String = ConfigStore.shared.current.panelTargetLanguage {
+        didSet {
+            guard targetLanguage != oldValue else { return }
+            ConfigStore.shared.update { $0.panelTargetLanguage = targetLanguage }
+        }
+    }
     @Published var isLoading = false
     @Published var errorMessage: String?
+
+    /// 当前输入的检测语言（NaturalLanguage，离线）；空输入为 nil。
+    var detectedSourceCode: String? {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : LanguageCatalog.detect(text)
+    }
+
+    /// 源语言展示名：检测到则显示语言名，否则「自动检测」。
+    var sourceDisplayLabel: String {
+        detectedSourceCode.map { LanguageCatalog.name(for: $0) } ?? "自动检测"
+    }
 
     /// 展示模式；切换时窗口尺寸随之变化（同窗口内切换）。
     @Published var mode: PanelMode = .simple {
@@ -63,19 +81,22 @@ final class InputPanelController: ObservableObject {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    /// 预热：启动时建好面板与 SwiftUI 视图，首次呼出免构建开销。
+    func prewarm() {
+        if panel == nil { buildPanel() }
+    }
+
     // MARK: - 展示 / 关闭
 
     /// 快捷键无选中时：弹简洁模式面板。
     func show() {
         translateTask?.cancel()
         detailedTask?.cancel()
-        // 每次打开时重置状态
-        inputText = ""
-        resultText = ""
+        // 草稿语义：主动关闭（Esc / ⌘W / 红色关闭键 / 快捷键 toggle）会清空内容，
+        // 只有失焦（可能误触）关闭才保留现场；此处不再做任何重置。
         errorMessage = nil
         isLoading = false
         pairs = []
-        direction = ConfigStore.shared.current.defaultDirection
         mode = .simple
         focusToken += 1
         present()
@@ -89,7 +110,6 @@ final class InputPanelController: ObservableObject {
         resultText = ""
         errorMessage = nil
         isLoading = false
-        direction = ConfigStore.shared.current.defaultDirection
         focusToken += 1
         mode = .detailed
         present()
@@ -97,6 +117,19 @@ final class InputPanelController: ObservableObject {
 
     private func present() {
         if panel == nil { buildPanel() }
+        // 失焦即关：TLKit 让出活跃状态（点击/⌘Tab 到其他应用）即关闭面板。
+        // dismiss 内的焦点归还逻辑会自检前台应用，不会把焦点抢回来。
+        if resignObserver == nil {
+            resignObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.isVisible else { return }
+                    // 失焦被动关闭：保留现场，避免误触丢稿。
+                    self.dismiss(clearDraft: false)
+                }
+            }
+        }
         // 激活 TLKit：外部输入工具（语音输入、输入法等）只会把文本送给活跃应用，
         // 不激活则面板拿不到它们的输出；关闭时归还焦点给原前台应用。
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -108,12 +141,16 @@ final class InputPanelController: ObservableObject {
         installKeyMonitor()
     }
 
-    func dismiss() {
+    /// 关闭面板。
+    /// - Parameter clearDraft: 主动关闭（Esc / ⌘W / 红色关闭键 / 快捷键 toggle）传 true 清空内容；
+    ///   失焦被动关闭传 false 保留现场，避免误触丢稿。
+    func dismiss(clearDraft: Bool = true) {
         translateTask?.cancel()
         detailedTask?.cancel()
         removeKeyMonitor()
         SpeechManager.shared.stop()
         panel?.orderOut(nil)
+        if clearDraft { clearInput() }
         // 归还焦点：仅当期间用户没有自己切走（前台仍是 TLKit）时才归还。
         if let previousApp,
            NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -136,7 +173,7 @@ final class InputPanelController: ObservableObject {
             self.isLoading = true
             self.errorMessage = nil
 
-            let target = self.direction.targetLanguage
+            let target = self.targetLanguage
             let truncated = text.count > 3000
             let sourceText = String(text.prefix(3000))
 
@@ -163,14 +200,14 @@ final class InputPanelController: ObservableObject {
 
     // MARK: - 面板操作
 
-    /// 「⇄」交换语言方向；已有输入时立即重译。
-    func swapDirection() {
-        direction = direction.swapped
-        if mode == .detailed {
-            translateDetailed()
-        } else if !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            translate()
-        }
+    /// 「⇄」交换（Google 翻译式）：译文变原文重新翻译，目标语言换成原输入的检测语言。
+    /// 无译文或源语言与目标相同时不可用。
+    func swapLanguages() {
+        guard !resultText.isEmpty, let source = detectedSourceCode, source != targetLanguage else { return }
+        inputText = resultText
+        resultText = ""
+        targetLanguage = source
+        // 视图的 onChange(inputText) 会自动调度实时翻译。
     }
 
     func clearInput() {
@@ -229,7 +266,7 @@ final class InputPanelController: ObservableObject {
                 self.errorMessage = error.localizedDescription
                 return
             }
-            let target = self.direction.targetLanguage
+            let target = self.targetLanguage
             let count = sentences.count
             await withTaskGroup(of: (Int, String?).self) { group in
                 var submitted = 0
@@ -304,8 +341,8 @@ final class InputPanelController: ObservableObject {
     private func buildPanel() {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: Int(TLStyle.inputWidth), height: 268),
-            // 不带 .closable：隐藏红绿灯按钮，浮窗不像普通窗口（Esc 关闭）。
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            // .closable：提供红色关闭按钮（高频浮窗的可见出口）；黄/绿对浮窗无意义，隐藏。
+            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .closable],
             backing: .buffered,
             defer: false
         )
@@ -313,6 +350,9 @@ final class InputPanelController: ObservableObject {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panel.delegate = self
         panel.isMovableByWindowBackground = true
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
@@ -329,6 +369,8 @@ final class InputPanelController: ObservableObject {
         effect.layer?.masksToBounds = true
 
         let hosting = NSHostingView(rootView: InputPanelView(controller: self))
+        // 隐藏标题栏仍会向 SwiftUI 下发安全区，关掉后语言栏才能上提到关闭键同一水平线。
+        hosting.safeAreaRegions = []
         hosting.translatesAutoresizingMaskIntoConstraints = false
         effect.addSubview(hosting)
         NSLayoutConstraint.activate([
@@ -360,17 +402,43 @@ final class InputPanelController: ObservableObject {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            // ⌘+Enter 翻译
-            if event.modifierFlags.contains(.command), event.keyCode == 36 {
-                MainActor.assumeIsolated { self?.translate() }
-                return nil
+            // NSEvent 不可跨隔离传递（非 Sendable），先拆出原始值再进 MainActor 闭包。
+            let keyCode = event.keyCode
+            let mods = Shortcut.carbonModifiers(
+                from: event.modifierFlags.intersection(.deviceIndependentFlagsMask))
+            let cmd = mods & 0x100 != 0
+            let handled: Bool = MainActor.assumeIsolated {
+                guard let self else { return false }
+                let config = ConfigStore.shared.current
+                // ⌘+Enter 翻译
+                if cmd, keyCode == 36 { self.translate(); return true }
+                // 朗读（默认 ⌘R，可在设置中改）
+                if config.panelSpeakHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    self.speakPreferred(); return true
+                }
+                // 清空输入（默认 ⌘K，可在设置中改）
+                if config.panelClearHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    self.clearInput(); return true
+                }
+                // ⌘1 简洁模式 / ⌘2 详细模式
+                if cmd, keyCode == 18 { self.mode = .simple; return true }
+                if cmd, keyCode == 19 { self.mode = .detailed; return true }
+                // Esc / ⌘W 关闭
+                if keyCode == 53 || (cmd && keyCode == 13) { self.dismiss(); return true }
+                // ⌘Q 退出前确认，防误退
+                if cmd, keyCode == 12 { QuitGuard.confirm(); return true }
+                return false
             }
-            // Esc 关闭
-            if event.keyCode == 53 {
-                MainActor.assumeIsolated { self?.dismiss() }
-                return nil
-            }
-            return event
+            return handled ? nil : event
+        }
+    }
+
+    /// ⌘R 朗读：译文优先，无译文时读原文。
+    private func speakPreferred() {
+        if !resultText.isEmpty {
+            SpeechManager.shared.toggle(text: resultText, language: targetLanguage)
+        } else if let source = detectedSourceCode {
+            SpeechManager.shared.toggle(text: inputText, language: source)
         }
     }
 
@@ -379,6 +447,12 @@ final class InputPanelController: ObservableObject {
             NSEvent.removeMonitor(m)
             keyMonitor = nil
         }
+    }
+
+    /// 点击红色关闭按钮 = Esc 关闭（走统一 dismiss：清理监听、停止朗读、归还焦点）。
+    nonisolated func windowShouldClose(_ sender: NSWindow) -> Bool {
+        MainActor.assumeIsolated { self.dismiss() }
+        return false
     }
 
 }
@@ -426,20 +500,25 @@ struct InputPanelView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 132)
-            .help("切换展示模式：简洁为双栏实时翻译，详细为逐句对照")
+            .help("切换展示模式：简洁为双栏实时翻译，详细为逐句对照（⌘1 / ⌘2）")
             .accessibilityLabel("展示模式")
         }
+        // 上提到与左上角红色关闭键同一水平线，消除标题栏死空间；左侧让位关闭键。
+        .padding(.leading, 52)
+        .padding(.trailing, TLStyle.space3)
         .padding(.top, TLStyle.space3)
-        .padding(.bottom, TLStyle.space2)
+        .padding(.bottom, 10)
     }
 
     private var languageBar: some View {
         HStack(spacing: 0) {
-            Text(controller.direction.sourceLabel)
+            // 源语言始终自动检测，翻译后显示检测结果。
+            Text(controller.sourceDisplayLabel)
                 .font(TLStyle.label)
+                .foregroundStyle(controller.detectedSourceCode == nil ? .tertiary : .primary)
                 .frame(maxWidth: .infinity)
             Button {
-                controller.swapDirection()
+                controller.swapLanguages()
             } label: {
                 Image(systemName: "arrow.left.arrow.right")
                     .font(TLStyle.control)
@@ -447,11 +526,19 @@ struct InputPanelView: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, TLStyle.space2)
-            .help("交换语言方向")
-            .accessibilityLabel("交换语言方向")
-            Text(controller.direction.targetLabel)
-                .font(TLStyle.label)
-                .frame(maxWidth: .infinity)
+            .disabled(controller.resultText.isEmpty)
+            .help("交换：译文变原文，目标语言换成原文语言")
+            .accessibilityLabel("交换语言")
+            // 目标语言下拉（面板内改动会持久化）。
+            Picker("目标语言", selection: $controller.targetLanguage) {
+                ForEach(LanguageCatalog.all, id: \.code) { lang in
+                    Text(lang.name).tag(lang.code)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("目标语言")
         }
     }
 
@@ -476,7 +563,7 @@ struct InputPanelView: View {
                 Button {
                     SpeechManager.shared.toggle(
                         text: controller.inputText,
-                        language: controller.direction.sourceLanguage
+                        language: controller.detectedSourceCode ?? "en"
                     )
                 } label: {
                     Image(systemName: "speaker.wave.2")
@@ -489,17 +576,17 @@ struct InputPanelView: View {
 
                 Spacer()
 
-                if !controller.inputText.isEmpty {
-                    Button {
-                        controller.clearInput()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tertiary)
-                    .help("清空输入")
-                    .accessibilityLabel("清空输入")
+                // 常驻显示（空内容置灰）：清空入口要看得见，不用记住快捷键才发现。
+                Button {
+                    controller.clearInput()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .disabled(controller.inputText.isEmpty && controller.resultText.isEmpty)
+                .help("清空输入（\(ConfigStore.shared.current.panelClearHotkey.displayString)）")
+                .accessibilityLabel("清空输入")
             }
             .font(TLStyle.control)
             .padding(.horizontal, TLStyle.space2)
@@ -516,9 +603,19 @@ struct InputPanelView: View {
             ScrollView {
                 Group {
                     if let error = controller.errorMessage {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .font(TLStyle.control)
-                            .foregroundStyle(.red)
+                        // 柔和错误态：橙标 + 次级文字，附设置引导。
+                        VStack(alignment: .leading, spacing: TLStyle.space2) {
+                            Label {
+                                Text(error)
+                                    .font(TLStyle.caption)
+                                    .foregroundStyle(.secondary)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(.orange)
+                            }
+                            Button("翻译设置…") { SettingsWindow.present() }
+                                .controlSize(.small)
+                        }
                     } else if controller.resultText.isEmpty {
                         Text("翻译")
                             .font(TLStyle.body)
@@ -549,7 +646,7 @@ struct InputPanelView: View {
                 Button {
                     SpeechManager.shared.toggle(
                         text: controller.resultText,
-                        language: controller.direction.targetLanguage
+                        language: controller.targetLanguage
                     )
                 } label: {
                     Image(systemName: "speaker.wave.2")
@@ -557,7 +654,7 @@ struct InputPanelView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(controller.resultText.isEmpty)
-                .help("朗读译文")
+                .help("朗读译文（\(ConfigStore.shared.current.panelSpeakHotkey.displayString)）")
                 .accessibilityLabel("朗读译文")
 
                 Button {
@@ -614,10 +711,20 @@ struct InputPanelView: View {
     private var detailedColumn: some View {
         Group {
             if let error = controller.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(TLStyle.control)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(alignment: .leading, spacing: TLStyle.space2) {
+                    Label {
+                        Text(error)
+                            .font(TLStyle.caption)
+                            .foregroundStyle(.secondary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    Button("翻译设置…") { SettingsWindow.present() }
+                        .controlSize(.small)
+                }
+                .padding(TLStyle.space2)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else if controller.pairs.isEmpty {
                 Text("输入文字后切到「详细」，逐句对照翻译")
                     .font(TLStyle.body)
@@ -678,7 +785,7 @@ struct InputPanelView: View {
         HStack(spacing: TLStyle.space1) {
             Button {
                 SpeechManager.shared.toggle(text: pair.source,
-                                            language: controller.direction.sourceLanguage)
+                                            language: controller.detectedSourceCode ?? "en")
             } label: {
                 Image(systemName: "speaker.wave.2")
             }
@@ -688,7 +795,7 @@ struct InputPanelView: View {
             Button {
                 if let translation = pair.translation {
                     SpeechManager.shared.toggle(text: translation,
-                                                language: controller.direction.targetLanguage)
+                                                language: controller.targetLanguage)
                 }
             } label: {
                 Image(systemName: "waveform")
@@ -725,7 +832,9 @@ struct InputPanelView: View {
                 .font(TLStyle.footnote)
                 .foregroundStyle(.tertiary)
             Spacer()
-            Text("⌘Enter 立即翻译 · Esc 关闭")
+            // 快捷键只留不可发现的：朗读/清空的快捷键在各自按钮悬停提示里，
+            // ⌘Enter 因实时自动翻译近乎冗余（功能保留，不占提示位）。
+            Text("⌘1/⌘2 切换模式 · Esc/⌘W 关闭")
                 .font(TLStyle.footnote)
                 .foregroundStyle(.tertiary)
         }

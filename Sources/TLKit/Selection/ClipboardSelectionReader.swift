@@ -7,7 +7,16 @@ import AppKit
 @MainActor
 final class ClipboardSelectionReader: SelectionReader {
 
+    /// 上一轮取词遗留的异步剪贴板还原任务。
+    /// 新一轮取词必须等它落地：还原动作（clearContents + 重写）会改变
+    /// changeCount，否则会被本轮轮询误判为前台应用响应了 ⌘C，
+    /// 把还原回去的旧剪贴板内容当成选中文字（无选中时翻译旧内容的 bug）。
+    private var pendingRestore: Task<Void, Never>?
+
     func readSelection() async -> String? {
+        await pendingRestore?.value
+        pendingRestore = nil
+
         let pb = NSPasteboard.general
         let backup = Self.backup(of: pb)
         let before = pb.changeCount
@@ -15,16 +24,23 @@ final class ClipboardSelectionReader: SelectionReader {
         postCopy()
 
         // 轮询等待剪贴板变化，上限 1 秒。
+        // 25ms 粒度：多数应用几十毫秒内完成 ⌘C，粗粒度会白等。
         let deadline = Date().addingTimeInterval(1.0)
         while pb.changeCount == before, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Task.sleep(for: .milliseconds(25))
         }
 
-        let text: String? = pb.changeCount != before ? pb.string(forType: .string) : nil
+        let changed = pb.changeCount != before
+        let text: String? = changed ? pb.string(forType: .string) : nil
 
-        // 给源应用一点时间完成写入，再还原。
-        try? await Task.sleep(for: .milliseconds(120))
-        Self.restore(backup, to: pb)
+        // 剪贴板未变（无选中内容）则无需还原；
+        // 有变化时给源应用短暂时间完成写入后异步还原，不阻塞后续翻译。
+        if changed {
+            pendingRestore = Task {
+                try? await Task.sleep(for: .milliseconds(80))
+                Self.restore(backup, to: pb)
+            }
+        }
 
         return text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : text
     }

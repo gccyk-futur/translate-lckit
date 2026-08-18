@@ -8,8 +8,18 @@ struct Shortcut: Codable, Equatable {
 
     /// 默认 ⌥D（kVK_ANSI_D = 2，optionKey = 0x800）。
     static let `default` = Shortcut(keyCode: 2, carbonModifiers: 0x800)
+    /// 面板内朗读默认 ⌘R（kVK_ANSI_R = 15，cmdKey = 0x100）。
+    static let defaultSpeak = Shortcut(keyCode: 15, carbonModifiers: 0x100)
+    /// 面板内清空默认 ⌘K（kVK_ANSI_K = 40，cmdKey = 0x100）。
+    static let defaultClear = Shortcut(keyCode: 40, carbonModifiers: 0x100)
 
     var isEmpty: Bool { keyCode == 0 && carbonModifiers == 0 }
+
+    /// 命中判断：按键事件（已拆成原始值）是否匹配该快捷键。
+    func matches(keyCode: UInt16, carbonModifiers mods: UInt32) -> Bool {
+        guard !isEmpty else { return false }
+        return UInt32(keyCode) == self.keyCode && mods == carbonModifiers
+    }
 
     /// 展示用字符串，如 "⌥D"。
     var displayString: String {
@@ -52,6 +62,7 @@ struct Shortcut: Codable, Equatable {
 }
 
 enum ServiceKind: String, Codable, CaseIterable {
+    case system
     case baidu
     case openai
     case ollama
@@ -64,42 +75,12 @@ enum ServiceKind: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
+        case .system: return "系统翻译"
         case .baidu: return "百度翻译"
         case .openai: return "AI 大模型"
         case .ollama: return "Ollama（本地）"
         }
     }
-}
-
-/// 翻译方向（输入面板用，也可配置默认值）。
-enum TranslationDirection: String, Codable, CaseIterable {
-    case en2zh
-    case zh2en
-
-    var label: String {
-        switch self {
-        case .en2zh: return "英 → 中"
-        case .zh2en: return "中 → 英"
-        }
-    }
-
-    var sourceLabel: String { self == .en2zh ? "英文" : "中文" }
-    var targetLabel: String { self == .en2zh ? "中文" : "英文" }
-
-    /// 对应的源语言代码。
-    var sourceLanguage: String { self == .en2zh ? "en" : "zh" }
-
-    /// 交换方向后的值（面板「⇄」按钮用）。
-    var swapped: TranslationDirection { self == .en2zh ? .zh2en : .en2zh }
-
-    /// 对应的目标语言代码（Baidu `to` 参数）。
-    var targetLanguage: String {
-        switch self {
-        case .en2zh: return "zh"
-        case .zh2en: return "en"
-        }
-    }
-
 }
 
 struct BaiduConfig: Codable, Equatable {
@@ -174,11 +155,15 @@ struct TTSConfig: Codable, Equatable {
 /// 应用配置（持久化为 Application Support/TLKit/config.json）。
 struct AppConfig: Codable, Equatable {
     var hotkey: Shortcut = .default
+    /// 面板内「朗读」快捷键（默认 ⌘R）。
+    var panelSpeakHotkey: Shortcut = .defaultSpeak
+    /// 面板内「清空输入」快捷键（默认 ⌘K）。
+    var panelClearHotkey: Shortcut = .defaultClear
     /// 气泡自动消失秒数；0 = 不自动消失。
     var autoDismissSeconds: Int = 8
     /// 翻译目标语言（百度语种代码，如 zh / en）。
     var targetLanguage: String = "zh"
-    var service: ServiceKind = .baidu
+    var service: ServiceKind = .system
     var baidu: BaiduConfig = .init()
     var openai: OpenAIConfig = .init()
     var ollama: OllamaConfig = .init()
@@ -186,10 +171,14 @@ struct AppConfig: Codable, Equatable {
     var historyMaxCount: Int = 500
     /// TTS 配置。
     var tts: TTSConfig = .init()
-    /// 输入面板默认翻译方向。
-    var defaultDirection: TranslationDirection = .en2zh
+    /// 输入面板目标语言（通用两字母码；随用户改动持久化）。
+    var panelTargetLanguage: String = "zh"
     /// 外观模式：跟随系统 / 浅色 / 深色。
     var appearance: AppearanceMode = .system
+    /// 辅助功能「不再提醒」：true 时快捷键无权限不再弹提示，直开输入面板。
+    var suppressPermissionHint: Bool = false
+    /// 气泡内快捷键提示「不再提示」：true 时结果气泡不再显示快捷键小字行。
+    var suppressBubbleHints: Bool = false
 
     // 自定义解码：缺字段时回退默认值，避免配置升级导致解析失败。
     init() {}
@@ -198,6 +187,8 @@ struct AppConfig: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppConfig()
         hotkey = try c.decodeIfPresent(Shortcut.self, forKey: .hotkey) ?? d.hotkey
+        panelSpeakHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelSpeakHotkey) ?? d.panelSpeakHotkey
+        panelClearHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelClearHotkey) ?? d.panelClearHotkey
         autoDismissSeconds = try c.decodeIfPresent(Int.self, forKey: .autoDismissSeconds) ?? d.autoDismissSeconds
         targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? d.targetLanguage
         service = try c.decodeIfPresent(ServiceKind.self, forKey: .service) ?? d.service
@@ -206,8 +197,10 @@ struct AppConfig: Codable, Equatable {
         ollama = try c.decodeIfPresent(OllamaConfig.self, forKey: .ollama) ?? d.ollama
         historyMaxCount = try c.decodeIfPresent(Int.self, forKey: .historyMaxCount) ?? d.historyMaxCount
         tts = try c.decodeIfPresent(TTSConfig.self, forKey: .tts) ?? d.tts
-        defaultDirection = try c.decodeIfPresent(TranslationDirection.self, forKey: .defaultDirection) ?? d.defaultDirection
+        panelTargetLanguage = try c.decodeIfPresent(String.self, forKey: .panelTargetLanguage) ?? d.panelTargetLanguage
         appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? d.appearance
+        suppressPermissionHint = try c.decodeIfPresent(Bool.self, forKey: .suppressPermissionHint) ?? d.suppressPermissionHint
+        suppressBubbleHints = try c.decodeIfPresent(Bool.self, forKey: .suppressBubbleHints) ?? d.suppressBubbleHints
     }
 }
 

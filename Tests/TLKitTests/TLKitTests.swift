@@ -50,7 +50,7 @@ final class TLKitTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AppConfig.self, from: Data("{}".utf8))
         XCTAssertEqual(decoded.hotkey, .default)
         XCTAssertEqual(decoded.autoDismissSeconds, 8)
-        XCTAssertEqual(decoded.service, .baidu)
+        XCTAssertEqual(decoded.service, .system)
         XCTAssertEqual(decoded.historyMaxCount, 500)
         XCTAssertEqual(decoded.tts.provider, .system)
     }

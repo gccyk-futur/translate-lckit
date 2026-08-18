@@ -10,6 +10,8 @@ import SwiftUI
 enum SettingsWindow {
     private static var windowController: NSWindowController?
     private static let delegate = SettingsPolicyDelegate()
+    /// 演示模式（Debug 截图）要直接落到的页签；nil = 默认通用。
+    static var pendingPane: SettingsPane?
 
     static func present() {
         if let wc = windowController {
@@ -106,9 +108,12 @@ struct SettingsView: View {
     @State private var baiduSecret = KeychainStore.get(.baiduSecret) ?? ""
     @State private var openaiKey = KeychainStore.get(.openaiKey) ?? ""
     @State private var azureKey = KeychainStore.get(.azureKey) ?? ""
+    // 辅助功能权限状态：直装版用于权限区块，商店版用于「高级玩家」彩蛋（只读检测）。
     @State private var permissionRefreshID = UUID()
+    #if !APP_STORE
     @State private var restartRequested = false
-    @State private var selectedPane: SettingsPane? = .general
+    #endif
+    @State private var selectedPane: SettingsPane? = SettingsWindow.pendingPane ?? .general
     @State private var testingKey: String?
     @State private var testMessage: [String: String] = [:]
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -118,9 +123,11 @@ struct SettingsView: View {
         return AXIsProcessTrusted()
     }
 
+    #if !APP_STORE
     private var needsRestart: Bool {
         restartRequested && accessibilityGranted
     }
+    #endif
 
     var body: some View {
         NavigationSplitView {
@@ -206,6 +213,9 @@ struct SettingsView: View {
                 .help("跟随系统将随 macOS 外观自动切换；浅色/深色强制指定")
             }
 
+            #if !APP_STORE
+            // 辅助功能权限仅直装版需要（模拟 ⌘C 取词）；
+            // App Store 版按审核条款 2.4.5 不使用 Accessibility，隐藏此区块。
             Section("权限") {
                 HStack {
                     Image(systemName: accessibilityGranted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
@@ -232,6 +242,10 @@ struct SettingsView: View {
                     }
                 }
 
+                Text("辅助功能权限仅用于读取你选中的文字（模拟 ⌘C），内容不离开本机。不授权也不影响使用：按快捷键会直接打开输入翻译面板。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if needsRestart {
                     HStack {
                         Image(systemName: "arrow.triangle.2.circlepath")
@@ -252,17 +266,49 @@ struct SettingsView: View {
                     }
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                permissionRefreshID = UUID()
+            #else
+            // 彩蛋：商店版按审核条款 2.4.5 不使用辅助功能；
+            // 若用户自行在系统设置中授权，仅展示说明与致敬（只读检测，不请求、不启用任何功能）。
+            if accessibilityGranted {
+                Section("彩蛋") {
+                    HStack(alignment: .top) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("发现高级玩家")
+                                .font(.system(size: 13))
+                            Text("你已在系统设置中授予辅助功能权限。受 App Store 沙箱限制，商店版不包含划词翻译功能；想要「选中即译」的完整体验，可使用官网渠道版，或从开源社区获取源码自行编译。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Link("了解完整体验与开源社区", destination: URL(string: "https://ckai.me/tlkit/support.html")!)
+                                .font(.caption)
+                        }
+                    }
+                }
             }
+            #endif
+
             Section("快捷键") {
-                LabeledContent("翻译选中内容") {
+                LabeledContent(hotkeyActionLabel) {
                     ShortcutRecorderView(shortcut: Binding(
                         get: { config.current.hotkey },
                         set: { newValue in
                             config.update { $0.hotkey = newValue }
                             TranslationController.shared.applyHotkeyChange()
                         }
+                    ))
+                }
+                LabeledContent("面板内朗读") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.panelSpeakHotkey },
+                        set: { newValue in config.update { $0.panelSpeakHotkey = newValue } }
+                    ))
+                    .help("气泡为空格键（固定）；输入面板默认 ⌘R，译文优先、无译文读原文")
+                }
+                LabeledContent("面板内清空输入") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.panelClearHotkey },
+                        set: { newValue in config.update { $0.panelClearHotkey = newValue } }
                     ))
                 }
             }
@@ -280,6 +326,11 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        // App 回到前台时刷新权限状态：直装版的权限区块与商店版的彩蛋都靠它。
+        // 挂在 Form 上而非某个 Section——彩蛋 Section 在未授权时不存在，挂它上面永远不会触发。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissionRefreshID = UUID()
+        }
     }
 
     private var servicesPane: some View {
@@ -294,12 +345,27 @@ struct SettingsView: View {
                     }
                 }
 
-                Picker("目标语言", selection: targetLanguageBinding) {
+                #if APP_STORE
+                // 商店版无划词取词（审核条款 2.4.5），此设置仅用于历史「重新翻译」。
+                Picker("默认翻译为", selection: targetLanguageBinding) {
                     ForEach(Self.commonLanguages, id: \.code) { lang in
                         Text(lang.label).tag(lang.code)
                     }
                     Text("自定义…").tag(Self.customLanguageTag)
                 }
+                .help("历史记录「重新翻译」时的目标语言")
+                Text("受 App Store 沙箱安全机制限制，商店版无法自动获取选中的文字：按快捷键呼出面板后 ⌘V 粘贴即可翻译。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                #else
+                Picker("划词翻译为", selection: targetLanguageBinding) {
+                    ForEach(Self.commonLanguages, id: \.code) { lang in
+                        Text(lang.label).tag(lang.code)
+                    }
+                    Text("自定义…").tag(Self.customLanguageTag)
+                }
+                .help("快捷键取词后翻译成的目标语言（全局生效）")
+                #endif
 
                 if targetLanguageBinding.wrappedValue == Self.customLanguageTag {
                     TextField("语言代码", text: Binding(
@@ -310,17 +376,25 @@ struct SettingsView: View {
             }
 
             Section("输入翻译") {
-                Picker("默认方向", selection: Binding(
-                    get: { config.current.defaultDirection },
-                    set: { dir in config.update { $0.defaultDirection = dir } }
+                Picker("面板翻译为", selection: Binding(
+                    get: { config.current.panelTargetLanguage },
+                    set: { lang in config.update { $0.panelTargetLanguage = lang } }
                 )) {
-                    ForEach(TranslationDirection.allCases, id: \.self) { dir in
-                        Text(dir.label).tag(dir)
+                    ForEach(Self.commonLanguages, id: \.code) { lang in
+                        Text(lang.label).tag(lang.code)
                     }
                 }
+                .help("输入面板的目标语言；源语言始终自动检测。面板顶栏改动会同步到这里")
             }
 
             switch config.current.service {
+            case .system:
+                Section("系统翻译") {
+                    Text("macOS 内置翻译引擎：免费、离线、免配置、隐私最佳。首次翻译某语言对时，系统会引导下载对应语言模型。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    testRow(key: "system") { runTranslationTest(.system) }
+                }
             case .baidu:
                 Section("百度翻译") {
                     TextField("API Key", text: Binding(
@@ -328,7 +402,7 @@ struct SettingsView: View {
                         set: { apiKey in config.update { $0.baidu.apiKey = apiKey } }
                     ))
 
-                    SecureField("Secret Key", text: $baiduSecret)
+                    SecretField(title: "Secret Key", text: $baiduSecret)
                         .onChange(of: baiduSecret) { _, newValue in
                             KeychainStore.set(newValue, for: .baiduSecret)
                         }
@@ -352,7 +426,7 @@ struct SettingsView: View {
                             set: { model in config.update { $0.openai.model = model } }
                         ), prompt: Text("如 deepseek-chat"))
 
-                        SecureField("API Key", text: $openaiKey)
+                        SecretField(title: "API Key", text: $openaiKey)
                             .onChange(of: openaiKey) { _, newValue in
                                 KeychainStore.set(newValue, for: .openaiKey)
                             }
@@ -391,9 +465,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    /// 模型服务的系统提示词（只读展示，与请求实际使用的一致）。
+    /// 模型服务的系统提示词（只读展示，与请求实际使用的一致，随目标语言动态变化）。
     private var promptSection: some View {
-        Section("提示词（只读）") {
+        Section("提示词（只读 · 随「划词翻译为」变化）") {
             Text(OpenAICompatibleTranslator.systemPrompt(for: config.current.targetLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -403,8 +477,8 @@ struct SettingsView: View {
 
     private var voiceHistoryPane: some View {
         Form {
-            Section("语音与历史") {
-                Picker("朗读语音", selection: Binding(
+            Section("朗读引擎") {
+                Picker("引擎", selection: Binding(
                     get: { config.current.tts.provider },
                     set: { provider in config.update { $0.tts.provider = provider } }
                 )) {
@@ -412,41 +486,25 @@ struct SettingsView: View {
                         Text(provider.label).tag(provider)
                     }
                 }
+            }
 
-                Picker("系统声音", selection: Binding(
-                    get: { config.current.tts.systemVoice },
-                    set: { voice in config.update { $0.tts.systemVoice = voice } }
-                )) {
-                    Text("自动").tag("")
-                    ForEach(systemVoiceOptions, id: \.identifier) { voice in
-                        Text("\(voice.name)（\(voice.language)）").tag(voice.identifier)
-                    }
-                }
-
-                HStack {
-                    Button("试听系统声音") {
-                        Task { try? await SystemSpeechService().speak("声音试听。", language: "zh") }
-                    }
-                    .controlSize(.small)
-                    Spacer()
-                }
-
-                Text("所选声音语种与朗读文本不一致时，自动回退为按文本语言选声。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if config.current.tts.provider == .azure {
-                    TextField("区域", text: Binding(
-                        get: { config.current.tts.azureRegion },
-                        set: { region in config.update { $0.tts.azureRegion = region } }
-                    ), prompt: Text("如 eastasia"))
-
-                    SecureField("订阅密钥", text: $azureKey)
-                        .onChange(of: azureKey) { _, newValue in
-                            KeychainStore.set(newValue, for: .azureKey)
+            // 播报声音：随引擎动态切换；两个引擎共用同一「朗读速度」全局配置。
+            Section("播报声音") {
+                if config.current.tts.provider == .system {
+                    Picker("声音", selection: Binding(
+                        get: { config.current.tts.systemVoice },
+                        set: { voice in config.update { $0.tts.systemVoice = voice } }
+                    )) {
+                        Text("自动").tag("")
+                        ForEach(systemVoiceOptions, id: \.identifier) { voice in
+                            Text("\(voice.name)（\(voice.language)）").tag(voice.identifier)
                         }
-
-                    Picker("神经语音", selection: Binding(
+                    }
+                    Text("所选声音语种与朗读文本不一致时，自动回退为按文本语言选声。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker("声音", selection: Binding(
                         get: { config.current.tts.azureVoice },
                         set: { voice in config.update { $0.tts.azureVoice = voice } }
                     )) {
@@ -455,14 +513,59 @@ struct SettingsView: View {
                             Text(option.label).tag(option.id)
                         }
                     }
+                }
 
-                    Text("未配置完整时自动回退系统语音。")
+                HStack {
+                    Button("试听声音") {
+                        // 走 SpeechManager：按当前引擎、声音、语速配置播放。
+                        SpeechManager.shared.toggle(text: "你好，这是朗读试听。", language: "zh")
+                    }
+                    .controlSize(.small)
+                    Spacer()
+                }
+            }
+
+            Section("朗读速度") {
+                HStack(spacing: TLStyle.space2) {
+                    Image(systemName: "tortoise.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                    Slider(value: Binding(
+                        get: { config.current.tts.speechRate },
+                        set: { rate in config.update { $0.tts.speechRate = rate } }
+                    ), in: 0.5...2.0, step: 0.1)
+                    .help("全局朗读速度，气泡与翻译面板中的调节与此同源")
+                    Image(systemName: "hare.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                    Text(String(format: "%.1fx", config.current.tts.speechRate))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, alignment: .trailing)
+                }
+            }
+
+            if config.current.tts.provider == .azure {
+                Section("Azure 配置") {
+                    TextField("区域", text: Binding(
+                        get: { config.current.tts.azureRegion },
+                        set: { region in config.update { $0.tts.azureRegion = region } }
+                    ), prompt: Text("如 eastasia"))
+
+                    SecretField(title: "订阅密钥", text: $azureKey)
+                        .onChange(of: azureKey) { _, newValue in
+                            KeychainStore.set(newValue, for: .azureKey)
+                        }
+
+                    Text("未配置完整时自动回退系统语音。测试连接会实际请求 Azure 并播放一句测试语音。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     testRow(key: "azure") { runAzureTest() }
                 }
+            }
 
+            Section("历史") {
                 Picker("历史保留", selection: Binding(
                     get: { config.current.historyMaxCount },
                     set: { count in
@@ -478,10 +581,14 @@ struct SettingsView: View {
                 }
 
                 LabeledContent("当前记录") {
-                    Button("清空全部", role: .destructive) {
-                        HistoryStore.shared.clear()
+                    HStack {
+                        Text("\(history.items.count) 条")
+                            .foregroundStyle(.secondary)
+                        Button("清空全部", role: .destructive) {
+                            HistoryStore.shared.clear()
+                        }
+                        .disabled(history.items.isEmpty)
                     }
-                    .disabled(history.items.isEmpty)
                 }
             }
         }
@@ -495,13 +602,15 @@ struct SettingsView: View {
             }
 
             Section("数据去向") {
-                Text("译文请求仅发往你配置的翻译服务（Ollama 完全本机）；朗读由系统本机合成，或发往你配置的 Azure 区域。")
+                Text("译文请求仅发往你配置的翻译服务；「系统翻译」与 Ollama 完全在本机处理，不经过任何第三方服务器。朗读由系统本机合成，或发往你配置的 Azure 区域。")
                 Text("密钥仅存本机 Keychain，不写入配置文件、不上传。")
             }
 
+            #if !APP_STORE
             Section("权限") {
                 Text("辅助功能权限仅用于模拟 ⌘C 获取选中文字，可随时在系统设置中撤销。")
             }
+            #endif
         }
         .formStyle(.grouped)
     }
@@ -594,7 +703,7 @@ struct SettingsView: View {
             if let message = testMessage[key] {
                 Text(message)
                     .font(.caption)
-                    .foregroundStyle(message.hasPrefix("✓") ? Color.secondary : Color.red)
+                    .foregroundStyle(message.hasPrefix("✓") ? Color.secondary : Color.orange)
                     .textSelection(.enabled)
             }
         }
@@ -650,6 +759,16 @@ struct SettingsView: View {
         #endif
     }
 
+    /// 快捷键动作文案：App Store 版快捷键打开输入面板；直装版模拟 ⌘C 划词取词。
+    private var hotkeyActionLabel: String {
+        #if APP_STORE
+        return "输入翻译"
+        #else
+        return "翻译选中内容"
+        #endif
+    }
+
+    #if !APP_STORE
     private func restartApplication() {
         let url = Bundle.main.bundleURL
         let configuration = NSWorkspace.OpenConfiguration()
@@ -659,6 +778,7 @@ struct SettingsView: View {
             NSApp.terminate(nil)
         }
     }
+    #endif
 }
 
 /// 快捷键录制控件：点击进入录制，按下带修饰键的组合即录入；Esc 取消。
@@ -703,6 +823,36 @@ struct ShortcutRecorderView: View {
         if let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
+        }
+    }
+}
+
+
+/// 密钥输入框：默认掩码（SecureField），右侧小眼睛切换明文查看。
+/// 用于各服务的 API Key / Secret / 订阅密钥。
+struct SecretField: View {
+    let title: String
+    @Binding var text: String
+    @State private var revealed = false
+
+    var body: some View {
+        HStack {
+            Group {
+                if revealed {
+                    TextField(title, text: $text)
+                } else {
+                    SecureField(title, text: $text)
+                }
+            }
+            Button {
+                revealed.toggle()
+            } label: {
+                Image(systemName: revealed ? "eye.slash" : "eye")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help(revealed ? "隐藏密钥" : "显示密钥")
+            .accessibilityLabel(revealed ? "隐藏密钥" : "显示密钥")
         }
     }
 }

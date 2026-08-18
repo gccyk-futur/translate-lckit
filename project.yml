@@ -51,6 +51,8 @@ targets:
       - path: Sources/TLKit/Translation/BaiduTranslator.swift
       - path: Sources/TLKit/Translation/TranslationService.swift
       - path: Sources/TLKit/Translation/OpenAICompatibleTranslator.swift
+      - path: Sources/TLKit/Translation/SystemTranslator.swift
+      - path: Sources/TLKit/Support/LanguageCatalog.swift
       - path: Sources/TLKit/History/HistoryStore.swift
       - path: Sources/TLKit/Support/ConfigStore.swift
       - path: Sources/TLKit/Support/AppearanceManager.swift

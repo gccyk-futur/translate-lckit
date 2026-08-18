@@ -9,6 +9,17 @@ struct BaiduTranslator: TranslationService {
 
     var displayName: String { "百度翻译" }
 
+    /// 通用两字母码 → 百度智能云语种代码（百度用 jp/kor/fra/spa 等非标码）。
+    static func baiduCode(for code: String) -> String {
+        switch code.lowercased() {
+        case "ja": return "jp"
+        case "ko": return "kor"
+        case "fr": return "fra"
+        case "es": return "spa"
+        default: return code
+        }
+    }
+
     func translate(_ text: String, to target: String) async throws -> String {
         let token = try await BaiduTokenStore.shared.getToken(apiKey: apiKey, secretKey: secretKey)
 
@@ -23,7 +34,7 @@ struct BaiduTranslator: TranslationService {
         let body: [String: String] = [
             "q": text,
             "from": "auto",
-            "to": target,
+            "to": Self.baiduCode(for: target),
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
