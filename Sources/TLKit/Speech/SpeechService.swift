@@ -110,7 +110,7 @@ final class AzureSpeechService: NSObject, SpeechService, AVAudioPlayerDelegate {
     func speak(_ text: String, language: String) async throws {
         stop()
         guard let url = URL(string: "https://\(region).tts.speech.microsoft.com/cognitiveservices/v1") else {
-            throw SpeechError.invalidConfiguration("Azure 区域配置无效")
+            throw SpeechError.invalidConfiguration(TLKitLocalization.string("Azure 区域配置无效"))
         }
         var request = URLRequest(url: url, timeoutInterval: 20)
         request.httpMethod = "POST"
@@ -123,7 +123,7 @@ final class AzureSpeechService: NSObject, SpeechService, AVAudioPlayerDelegate {
 
         let (data, _) = try await URLSession.shared.data(for: request)
         guard let player = try? AVAudioPlayer(data: data), player.prepareToPlay() else {
-            throw SpeechError.invalidConfiguration("TTS 返回数据无法播放")
+            throw SpeechError.invalidConfiguration(TLKitLocalization.string("TTS 返回数据无法播放"))
         }
         self.player = player
         player.delegate = self

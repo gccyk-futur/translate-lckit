@@ -10,7 +10,7 @@ struct OpenAICompatibleTranslator: TranslationService {
 
     func translate(_ text: String, to target: String) async throws -> String {
         guard let url = Self.chatEndpoint(baseURL: baseURL) else {
-            throw TranslationError.network(message: "\(displayName) Base URL 无效")
+            throw TranslationError.network(message: TLKitLocalization.format("%@ Base URL 无效", displayName))
         }
         guard !model.isEmpty else {
             throw TranslationError.notConfigured(serviceName: displayName)
@@ -34,12 +34,12 @@ struct OpenAICompatibleTranslator: TranslationService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw TranslationError.network(message: "\(displayName) 响应异常")
+            throw TranslationError.network(message: TLKitLocalization.format("%@ 响应异常", displayName))
         }
 
         if let decoded = try? JSONDecoder().decode(ResponsePayload.self, from: data) {
             if let error = decoded.error {
-                throw TranslationError.server(message: "\(error.message)（HTTP \(http.statusCode)）")
+                throw TranslationError.server(message: TLKitLocalization.format("%@（HTTP %lld）", error.message, http.statusCode))
             }
             if let content = decoded.choices?.first?.message.content {
                 let result = content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,7 +47,7 @@ struct OpenAICompatibleTranslator: TranslationService {
             }
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw TranslationError.server(message: "HTTP \(http.statusCode)：\(String(data: data, encoding: .utf8) ?? "")")
+            throw TranslationError.server(message: TLKitLocalization.format("HTTP %lld：%@", http.statusCode, String(data: data, encoding: .utf8) ?? ""))
         }
         throw TranslationError.emptyResult
     }

@@ -20,7 +20,7 @@ enum SettingsWindow {
         }
         let hosting = NSHostingController(rootView: SettingsView())
         let window = NSWindow(contentViewController: hosting)
-        window.title = "TLKit 设置"
+        window.title = TLKitLocalization.string("TLKit 设置")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(NSSize(width: 760, height: 540))
         window.minSize = NSSize(width: 680, height: 460)
@@ -82,11 +82,11 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general: return "通用"
-        case .services: return "翻译服务"
-        case .voiceHistory: return "语音与历史"
-        case .privacy: return "隐私"
-        case .about: return "关于"
+        case .general: return TLKitLocalization.string("通用")
+        case .services: return TLKitLocalization.string("翻译服务")
+        case .voiceHistory: return TLKitLocalization.string("语音与历史")
+        case .privacy: return TLKitLocalization.string("隐私")
+        case .about: return TLKitLocalization.string("关于")
         }
     }
 
@@ -223,7 +223,9 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("辅助功能")
                             .font(.system(size: 13))
-                        Text(accessibilityGranted ? "已授权" : "未授权 — 划词翻译需要此权限")
+                        Text(accessibilityGranted
+                             ? TLKitLocalization.string("已授权")
+                             : TLKitLocalization.string("未授权 — 划词翻译需要此权限"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -318,7 +320,7 @@ struct SettingsView: View {
                     get: { config.current.autoDismissSeconds },
                     set: { seconds in config.update { $0.autoDismissSeconds = seconds } }
                 )) {
-                    Text("关闭").tag(0)
+                    Text("不自动消失").tag(0)
                     Text("5 秒").tag(5)
                     Text("8 秒").tag(8)
                     Text("15 秒").tag(15)
@@ -552,7 +554,7 @@ struct SettingsView: View {
                         set: { region in config.update { $0.tts.azureRegion = region } }
                     ), prompt: Text("如 eastasia"))
 
-                    SecretField(title: "订阅密钥", text: $azureKey)
+                    SecretField(title: TLKitLocalization.string("订阅密钥"), text: $azureKey)
                         .onChange(of: azureKey) { _, newValue in
                             KeychainStore.set(newValue, for: .azureKey)
                         }
@@ -582,7 +584,7 @@ struct SettingsView: View {
 
                 LabeledContent("当前记录") {
                     HStack {
-                        Text("\(history.items.count) 条")
+                        Text(TLKitLocalization.format("%lld 条", history.items.count))
                             .foregroundStyle(.secondary)
                         Button("清空全部", role: .destructive) {
                             HistoryStore.shared.clear()
@@ -658,24 +660,28 @@ struct SettingsView: View {
     }
 
     private static let azureVoiceOptions: [(id: String, label: String)] = [
-        ("zh-CN-XiaoxiaoNeural", "晓晓 · 中文女"),
-        ("zh-CN-YunxiNeural", "云希 · 中文男"),
-        ("zh-CN-YunjianNeural", "云健 · 中文男"),
-        ("en-US-JennyNeural", "Jenny · 美英女"),
-        ("en-US-GuyNeural", "Guy · 美英男"),
-        ("en-GB-SoniaNeural", "Sonia · 英英女"),
-        ("ja-JP-NanamiNeural", "Nanami · 日语女"),
-        ("ko-KR-SunHiNeural", "SunHi · 韩语女"),
+        ("zh-CN-XiaoxiaoNeural", TLKitLocalization.string("晓晓 · 中文女")),
+        ("zh-CN-YunxiNeural", TLKitLocalization.string("云希 · 中文男")),
+        ("zh-CN-YunjianNeural", TLKitLocalization.string("云健 · 中文男")),
+        ("en-US-JennyNeural", TLKitLocalization.string("Jenny · 美英女")),
+        ("en-US-GuyNeural", TLKitLocalization.string("Guy · 美英男")),
+        ("en-GB-SoniaNeural", TLKitLocalization.string("Sonia · 英英女")),
+        ("ja-JP-NanamiNeural", TLKitLocalization.string("Nanami · 日语女")),
+        ("ko-KR-SunHiNeural", TLKitLocalization.string("SunHi · 韩语女")),
     ]
 
     // MARK: - 目标语言选择
 
     private static let customLanguageTag = "__custom__"
-    private static let commonLanguages: [(code: String, label: String)] = [
-        ("zh", "中文"), ("en", "英语"), ("ja", "日语"), ("ko", "韩语"),
-        ("fr", "法语"), ("de", "德语"), ("es", "西班牙语"), ("ru", "俄语"),
-        ("pt", "葡萄牙语"), ("it", "意大利语"),
-    ]
+    private static var commonLanguages: [(code: String, label: String)] {
+        [
+            ("zh", TLKitLocalization.string("中文")), ("en", TLKitLocalization.string("英语")),
+            ("ja", TLKitLocalization.string("日语")), ("ko", TLKitLocalization.string("韩语")),
+            ("fr", TLKitLocalization.string("法语")), ("de", TLKitLocalization.string("德语")),
+            ("es", TLKitLocalization.string("西班牙语")), ("ru", TLKitLocalization.string("俄语")),
+            ("pt", TLKitLocalization.string("葡萄牙语")), ("it", TLKitLocalization.string("意大利语")),
+        ]
+    }
 
     /// 目标语言选择：常见语言下拉 + 「自定义…」回退为代码输入框。
     private var targetLanguageBinding: Binding<String> {
@@ -696,7 +702,9 @@ struct SettingsView: View {
     /// 「测试连接」行：发一条短译文 / 试读一句，结果内联展示。
     private func testRow(key: String, run: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(testingKey == key ? "测试中…" : "测试连接") { run() }
+            Button(testingKey == key
+                   ? TLKitLocalization.string("测试中…")
+                   : TLKitLocalization.string("测试连接")) { run() }
                 .controlSize(.small)
                 .disabled(testingKey != nil)
 
@@ -716,7 +724,7 @@ struct SettingsView: View {
             do {
                 let service = try ServiceFactory.make(kind)
                 let result = try await service.translate("Hello", to: config.current.targetLanguage)
-                testMessage[kind.rawValue] = "✓ 译文：\(result)"
+                testMessage[kind.rawValue] = TLKitLocalization.format("✓ 译文：%@", result)
             } catch {
                 testMessage[kind.rawValue] = error.localizedDescription
             }
@@ -734,7 +742,7 @@ struct SettingsView: View {
             )
             do {
                 try await service.speak("语音测试。", language: "zh")
-                testMessage["azure"] = "✓ 已播放测试语音"
+                testMessage["azure"] = TLKitLocalization.string("✓ 已播放测试语音")
             } catch {
                 testMessage["azure"] = error.localizedDescription
             }
@@ -748,23 +756,23 @@ struct SettingsView: View {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "0"
         let build = info?["CFBundleVersion"] as? String ?? "0"
-        return "\(version)（\(build)）"
+        return TLKitLocalization.format("%@（%@）", version, build)
     }
 
     private static var channelName: String {
         #if APP_STORE
         return "App Store"
         #else
-        return "官网版"
+        return TLKitLocalization.string("官网版")
         #endif
     }
 
     /// 快捷键动作文案：App Store 版快捷键打开输入面板；直装版模拟 ⌘C 划词取词。
     private var hotkeyActionLabel: String {
         #if APP_STORE
-        return "输入翻译"
+        return TLKitLocalization.string("输入翻译")
         #else
-        return "翻译选中内容"
+        return TLKitLocalization.string("翻译选中内容")
         #endif
     }
 
@@ -793,11 +801,13 @@ struct ShortcutRecorderView: View {
 
     var body: some View {
         Button(action: { recording ? stopRecording() : startRecording() }) {
-            Text(recording ? "按下新的快捷键…" : shortcut.displayString)
+            Text(recording ? TLKitLocalization.string("按下新的快捷键…") : shortcut.displayString)
                 .monospaced()
                 .frame(minWidth: 64)
         }
-        .help(recording ? "按下新的快捷键（支持 F1-F12 单键），Esc 取消" : "点击后按下新的快捷键")
+        .help(recording
+              ? TLKitLocalization.string("按下新的快捷键（支持 F1-F12 单键），Esc 取消")
+              : TLKitLocalization.string("点击后按下新的快捷键"))
         .onDisappear { stopRecording() }
     }
 
@@ -851,8 +861,8 @@ struct SecretField: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help(revealed ? "隐藏密钥" : "显示密钥")
-            .accessibilityLabel(revealed ? "隐藏密钥" : "显示密钥")
+            .help(revealed ? TLKitLocalization.string("隐藏密钥") : TLKitLocalization.string("显示密钥"))
+            .accessibilityLabel(revealed ? TLKitLocalization.string("隐藏密钥") : TLKitLocalization.string("显示密钥"))
         }
     }
 }

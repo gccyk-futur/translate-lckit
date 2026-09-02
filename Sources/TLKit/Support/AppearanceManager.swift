@@ -8,9 +8,9 @@ enum AppearanceMode: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .system: return "跟随系统"
-        case .light: return "浅色"
-        case .dark: return "深色"
+        case .system: return TLKitLocalization.string("跟随系统")
+        case .light: return TLKitLocalization.string("浅色")
+        case .dark: return TLKitLocalization.string("深色")
         }
     }
 

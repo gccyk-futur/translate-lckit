@@ -5,11 +5,15 @@ import NaturalLanguage
 /// 代码统一用通用两字母码（zh / en / ja…）；各翻译服务内部自行映射自家语种码。
 enum LanguageCatalog {
     /// 主流语言（面向全球市场，与 TTS 支持语种对齐）。
-    static let all: [(code: String, name: String)] = [
-        ("zh", "中文"), ("en", "英语"), ("ja", "日语"), ("ko", "韩语"),
-        ("fr", "法语"), ("de", "德语"), ("es", "西班牙语"), ("ru", "俄语"),
-        ("pt", "葡萄牙语"), ("it", "意大利语"),
-    ]
+    static var all: [(code: String, name: String)] {
+        [
+            ("zh", TLKitLocalization.string("中文")), ("en", TLKitLocalization.string("英语")),
+            ("ja", TLKitLocalization.string("日语")), ("ko", TLKitLocalization.string("韩语")),
+            ("fr", TLKitLocalization.string("法语")), ("de", TLKitLocalization.string("德语")),
+            ("es", TLKitLocalization.string("西班牙语")), ("ru", TLKitLocalization.string("俄语")),
+            ("pt", TLKitLocalization.string("葡萄牙语")), ("it", TLKitLocalization.string("意大利语")),
+        ]
+    }
 
     static func name(for code: String) -> String {
         all.first { $0.code == code }?.name ?? code

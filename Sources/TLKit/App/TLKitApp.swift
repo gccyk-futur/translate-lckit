@@ -45,11 +45,11 @@ struct TLKitApp: App {
 enum QuitGuard {
     static func confirm() {
         let alert = NSAlert()
-        alert.messageText = "确定退出 TLKit？"
-        alert.informativeText = "退出后全局快捷键与翻译面板将不可用。"
+        alert.messageText = TLKitLocalization.string("确定退出 TLKit？")
+        alert.informativeText = TLKitLocalization.string("退出后全局快捷键与翻译面板将不可用。")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "退出")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: TLKitLocalization.string("退出"))
+        alert.addButton(withTitle: TLKitLocalization.string("取消"))
         // 翻译面板是 .popUpMenu 层级，确认框要再抬一级，否则被面板压在后面。
         alert.window.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
         NSApp.activate()

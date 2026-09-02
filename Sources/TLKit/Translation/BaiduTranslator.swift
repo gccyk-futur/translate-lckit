@@ -7,7 +7,7 @@ struct BaiduTranslator: TranslationService {
     let apiKey: String
     let secretKey: String
 
-    var displayName: String { "百度翻译" }
+    var displayName: String { TLKitLocalization.string("百度翻译") }
 
     /// 通用两字母码 → 百度智能云语种代码（百度用 jp/kor/fra/spa 等非标码）。
     static func baiduCode(for code: String) -> String {
@@ -24,7 +24,7 @@ struct BaiduTranslator: TranslationService {
         let token = try await BaiduTokenStore.shared.getToken(apiKey: apiKey, secretKey: secretKey)
 
         guard let url = URL(string: "https://aip.baidubce.com/rpc/2.0/mt/texttrans/v1?access_token=\(Self.percentEncode(token))") else {
-            throw TranslationError.network(message: "URL 无效")
+            throw TranslationError.network(message: TLKitLocalization.string("URL 无效"))
         }
 
         var request = URLRequest(url: url, timeoutInterval: 30)
@@ -43,13 +43,13 @@ struct BaiduTranslator: TranslationService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch let error as URLError where error.code == .timedOut {
-            throw TranslationError.network(message: "请求超时")
+            throw TranslationError.network(message: TLKitLocalization.string("请求超时"))
         } catch {
             throw TranslationError.network(message: error.localizedDescription)
         }
 
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw TranslationError.network(message: "HTTP 状态码异常")
+            throw TranslationError.network(message: TLKitLocalization.string("HTTP 状态码异常"))
         }
 
         struct ResultItem: Decodable {
@@ -69,11 +69,11 @@ struct BaiduTranslator: TranslationService {
         do {
             payload = try JSONDecoder().decode(Payload.self, from: data)
         } catch {
-            throw TranslationError.server(message: "响应解析失败")
+            throw TranslationError.server(message: TLKitLocalization.string("响应解析失败"))
         }
 
         if let code = payload.error_code {
-            throw TranslationError.server(message: payload.error_msg ?? "错误码 \(code)")
+            throw TranslationError.server(message: payload.error_msg ?? TLKitLocalization.format("错误码 %lld", code))
         }
         guard let items = payload.result?.trans_result, !items.isEmpty else {
             throw TranslationError.emptyResult
@@ -104,7 +104,7 @@ private actor BaiduTokenStore {
         }
 
         guard let url = URL(string: "https://aip.baidubce.com/oauth/2.0/token") else {
-            throw TranslationError.network(message: "URL 无效")
+            throw TranslationError.network(message: TLKitLocalization.string("URL 无效"))
         }
 
         var request = URLRequest(url: url, timeoutInterval: 30)
@@ -119,11 +119,11 @@ private actor BaiduTokenStore {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw TranslationError.network(message: "获取 access_token 失败：\(error.localizedDescription)")
+            throw TranslationError.network(message: TLKitLocalization.format("获取 access_token 失败：%@", error.localizedDescription))
         }
 
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw TranslationError.network(message: "获取 access_token 失败：HTTP 状态码异常")
+            throw TranslationError.network(message: TLKitLocalization.string("获取 access_token 失败：HTTP 状态码异常"))
         }
 
         struct TokenResponse: Decodable {
@@ -137,11 +137,11 @@ private actor BaiduTokenStore {
         do {
             tokenResp = try JSONDecoder().decode(TokenResponse.self, from: data)
         } catch {
-            throw TranslationError.server(message: "access_token 响应解析失败")
+            throw TranslationError.server(message: TLKitLocalization.string("access_token 响应解析失败"))
         }
 
         if let error = tokenResp.error {
-            throw TranslationError.server(message: "获取 access_token 失败：\(error) \(tokenResp.error_description ?? "")")
+            throw TranslationError.server(message: TLKitLocalization.format("获取 access_token 失败：%@ %@", error, tokenResp.error_description ?? ""))
         }
 
         // 缓存 token，提前 5 分钟过期。

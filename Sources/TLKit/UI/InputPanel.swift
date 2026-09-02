@@ -52,7 +52,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
 
     /// 源语言展示名：检测到则显示语言名，否则「自动检测」。
     var sourceDisplayLabel: String {
-        detectedSourceCode.map { LanguageCatalog.name(for: $0) } ?? "自动检测"
+        detectedSourceCode.map { LanguageCatalog.name(for: $0) } ?? TLKitLocalization.string("自动检测")
     }
 
     /// 展示模式；切换时窗口尺寸随之变化（同窗口内切换）。
@@ -185,7 +185,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
                 self.isLoading = false
 
                 HistoryStore.shared.appendDedup(HistoryItem(
-                    sourceText: truncated ? sourceText + " …（已截断）" : sourceText,
+                    sourceText: truncated ? sourceText + TLKitLocalization.string(" …（已截断）") : sourceText,
                     resultText: translation,
                     targetLang: target,
                     service: service.displayName

@@ -10,7 +10,7 @@ enum HistoryWindow {
         if controller == nil {
             let hosting = NSHostingController(rootView: HistoryView())
             let window = NSWindow(contentViewController: hosting)
-            window.title = "TLKit · 翻译历史"
+            window.title = TLKitLocalization.string("TLKit · 翻译历史")
             window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
             window.setContentSize(NSSize(width: 760, height: 480))
             window.minSize = NSSize(width: 560, height: 320)
@@ -78,7 +78,9 @@ struct HistoryView: View {
             if let item = history.items.first(where: { $0.id == selectedID }) {
                 HistoryDetail(item: item)
             } else {
-                Text(filtered.isEmpty ? "暂无翻译记录" : "选择一条记录查看详情")
+                Text(filtered.isEmpty
+                     ? TLKitLocalization.string("暂无翻译记录")
+                     : TLKitLocalization.string("选择一条记录查看详情"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -21,15 +21,15 @@ enum TranslationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured(let name):
-            return "请先在设置中完成「\(name)」的配置"
+            return TLKitLocalization.format("请先在设置中完成「%@」的配置", name)
         case .notAvailable(let description):
             return description
         case .server(let message):
-            return "翻译服务返回错误：\(message)"
+            return TLKitLocalization.format("翻译服务返回错误：%@", message)
         case .network(let message):
-            return "网络请求失败：\(message)"
+            return TLKitLocalization.format("网络请求失败：%@", message)
         case .emptyResult:
-            return "翻译服务未返回结果"
+            return TLKitLocalization.string("翻译服务未返回结果")
         }
     }
 }
@@ -49,19 +49,19 @@ enum ServiceFactory {
             if #available(macOS 26.0, *) {
                 return SystemTranslator()
             }
-            throw TranslationError.notAvailable(description: "系统翻译需要 macOS 26 及以上版本，请改用百度翻译或大模型服务")
+            throw TranslationError.notAvailable(description: TLKitLocalization.string("系统翻译需要 macOS 26 及以上版本，请改用百度翻译或大模型服务"))
         case .baidu:
             let apiKey = config.baidu.apiKey.trimmingCharacters(in: .whitespaces)
             let secret = (KeychainStore.get(.baiduSecret) ?? "").trimmingCharacters(in: .whitespaces)
             guard !apiKey.isEmpty, !secret.isEmpty else {
-                throw TranslationError.notConfigured(serviceName: "百度翻译")
+                throw TranslationError.notConfigured(serviceName: TLKitLocalization.string("百度翻译"))
             }
             return BaiduTranslator(apiKey: apiKey, secretKey: secret)
         case .openai:
             let baseURL = config.openai.baseURL.trimmingCharacters(in: .whitespaces)
             let model = config.openai.model.trimmingCharacters(in: .whitespaces)
             guard !baseURL.isEmpty, !model.isEmpty else {
-                throw TranslationError.notConfigured(serviceName: "AI 大模型")
+                throw TranslationError.notConfigured(serviceName: TLKitLocalization.string("AI 大模型"))
             }
             return OpenAICompatibleTranslator(
                 // 模型服务展示名带上模型名（气泡底栏 / 历史可见）。

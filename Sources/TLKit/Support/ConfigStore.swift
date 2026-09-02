@@ -75,10 +75,10 @@ enum ServiceKind: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .system: return "系统翻译"
-        case .baidu: return "百度翻译"
-        case .openai: return "AI 大模型"
-        case .ollama: return "Ollama（本地）"
+        case .system: return TLKitLocalization.string("系统翻译")
+        case .baidu: return TLKitLocalization.string("百度翻译")
+        case .openai: return TLKitLocalization.string("AI 大模型")
+        case .ollama: return TLKitLocalization.string("Ollama（本地）")
         }
     }
 }
@@ -122,7 +122,7 @@ enum TTSProvider: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .system: return "系统语音"
+        case .system: return TLKitLocalization.string("系统语音")
         case .azure: return "Microsoft Azure"
         }
     }

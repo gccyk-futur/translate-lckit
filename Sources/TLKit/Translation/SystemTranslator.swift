@@ -6,7 +6,7 @@ import Translation
 /// 系统可能引导下载语言模型（系统设置 → 通用 → 语言与地区 → 翻译语言）。
 @available(macOS 26.0, *)
 struct SystemTranslator: TranslationService {
-    let displayName = "系统翻译"
+    let displayName = TLKitLocalization.string("系统翻译")
 
     func translate(_ text: String, to target: String) async throws -> String {
         // 直接 init 必须显式给出源语言，用 NaturalLanguage 检测，失败回退英语。
@@ -24,8 +24,8 @@ struct SystemTranslator: TranslationService {
             throw error
         } catch {
             throw TranslationError.network(
-                message: "系统翻译失败：\(error.localizedDescription)。"
-                    + "可在「系统设置 → 通用 → 语言与地区 → 翻译语言」确认已下载对应语言模型。"
+                message: TLKitLocalization.format("系统翻译失败：%@。", error.localizedDescription)
+                    + TLKitLocalization.string("可在「系统设置 → 通用 → 语言与地区 → 翻译语言」确认已下载对应语言模型。")
             )
         }
     }

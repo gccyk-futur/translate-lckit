@@ -62,7 +62,7 @@ struct BubbleView: View {
         case .result(let source, let translation, let service, let truncated):
             VStack(alignment: .leading, spacing: TLStyle.space2) {
                 // 原文：次要层级，小字摘录
-                Text(truncated ? source + " …（已截断）" : source)
+                Text(truncated ? source + TLKitLocalization.string(" …（已截断）") : source)
                     .font(TLStyle.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
@@ -86,17 +86,17 @@ struct BubbleView: View {
                         .foregroundStyle(.tertiary)
                     Spacer()
                     iconButton(systemName: "list.bullet.below.rectangle",
-                               label: "详细对照",
-                               hint: "打开翻译面板，逐句对照原文与译文") { onOpenDetailed?(source) }
+                               label: TLKitLocalization.string("详细对照"),
+                               hint: TLKitLocalization.string("打开翻译面板，逐句对照原文与译文")) { onOpenDetailed?(source) }
                     iconButton(systemName: "speedometer",
-                               label: "朗读速度",
-                               hint: "展开或收起朗读速度调节条") { showSpeed.toggle() }
+                               label: TLKitLocalization.string("朗读速度"),
+                               hint: TLKitLocalization.string("展开或收起朗读速度调节条")) { showSpeed.toggle() }
                     iconButton(systemName: "speaker.wave.2",
-                               label: "朗读原文（空格）",
-                               hint: "朗读翻译前的原文，快捷键空格") { onSpeak?(source) }
+                               label: TLKitLocalization.string("朗读原文（空格）"),
+                               hint: TLKitLocalization.string("朗读翻译前的原文，快捷键空格")) { onSpeak?(source) }
                     iconButton(systemName: "doc.on.doc",
-                               label: "复制译文",
-                               hint: "将译文拷贝到剪贴板") {
+                               label: TLKitLocalization.string("复制译文"),
+                               hint: TLKitLocalization.string("将译文拷贝到剪贴板")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(translation, forType: .string)
                     }
