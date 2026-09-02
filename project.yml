@@ -38,6 +38,8 @@ targets:
         excludes:
           - "Resources/Info.plist"
           - "Resources/*.entitlements"
+          # 图标主图源文件（scripts/generate-icon.sh 的输入），不进 App bundle
+          - "Resources/AppIcon-1024.png"
     settings:
       base:
         PRODUCT_NAME: TLKit
