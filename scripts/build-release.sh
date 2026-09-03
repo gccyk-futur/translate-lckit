@@ -12,9 +12,10 @@ BUNDLE_ID="me.ckai.translate"
 BUILD_DIR="./build"
 NOTARY_PROFILE="TLKit-Notary"
 
-# 开发者身份：签名凭证经 1Password CLI 注入，按需改 vault 路径。
-TEAM_ID="$(op read op://My-Keys/apple/TEAM_ID)"
-SIGNING_NAME="$(op read op://My-Keys/apple/SIGNING_NAME)"
+# 开发者身份：优先取环境变量（APPLE_DEV_TEAM_ID / APPLE_DEV_SIGING_NAME，zshrc 注入）；
+# 未设置时回退 1Password CLI（注意 SIGING 变量名按 zshrc 原样，少个 N）。
+TEAM_ID="${APPLE_DEV_TEAM_ID:-$(op read op://My-Keys/apple/TEAM_ID)}"
+SIGNING_NAME="${APPLE_DEV_SIGING_NAME:-$(op read op://My-Keys/apple/SIGNING_NAME)}"
 export TLKIT_TEAM_ID="${TEAM_ID}"
 export TLKIT_SIGNING_NAME="${SIGNING_NAME}"
 
@@ -61,10 +62,16 @@ else
   step "跳过 .app 公证"
 fi
 
-step "打包 dmg"
+step "打包 dmg（附 /Applications 拖放快捷方式）"
 rm -f "${BUILD_DIR}/${APP_NAME}.dmg"
-hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_PATH}" \
+STAGING_DIR="${BUILD_DIR}/dmg-staging"
+rm -rf "${STAGING_DIR}"
+mkdir -p "${STAGING_DIR}"
+cp -R "${APP_PATH}" "${STAGING_DIR}/"
+ln -s /Applications "${STAGING_DIR}/Applications"
+hdiutil create -volname "${APP_NAME}" -srcfolder "${STAGING_DIR}" \
   -ov -format UDZO "${BUILD_DIR}/${APP_NAME}.dmg"
+rm -rf "${STAGING_DIR}"
 
 if [ "${SKIP_NOTARY}" = false ]; then
   step "公证 dmg（notarytool）"
