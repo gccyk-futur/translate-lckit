@@ -16,6 +16,11 @@ settings:
     INFOPLIST_FILE: Sources/TLKit/Resources/Info.plist
     GENERATE_INFOPLIST_FILE: false
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    # K1 修复：Xcode 26 的 actool 默认丢弃 .appiconset 位图、换成自动生成的
+    # icon stack（macOS 14 的 CoreUI 解析不了 → 图标回退成方块、菜单栏图标 nil）。
+    # 这两个开关强制 actool 把真实位图编进 Assets.car，并生成全尺寸 .icns 兜底。
+    ASSETCATALOG_COMPILER_INCLUDE_ALL_APP_ICONS: YES
+    ASSETCATALOG_OTHER_FLAGS: "--enable-icon-stack-fallback-generation=disabled"
     LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
   configs:
     Debug:
@@ -40,6 +45,15 @@ targets:
           - "Resources/*.entitlements"
           # 图标主图源文件（scripts/generate-icon.sh 的输入），不进 App bundle
           - "Resources/AppIcon-1024.png"
+          # macOS 14 兜底 icns 的原料，由下方 postBuild 脚本显式拷贝，不走资源拷贝
+          - "Resources/AppIcon-Legacy.icns"
+    # K1：actool 产出的 AppIcon.icns 只有 16/128 两档且 macOS 14 读不了 Assets.car，
+    # 用手工烘焙的全尺寸圆角 icns 覆盖。脚本阶段先于签名执行，覆盖物会被正常签进 bundle。
+    postBuildScripts:
+      - name: "Override legacy AppIcon.icns"
+        script: |
+          cp "${SRCROOT}/Sources/TLKit/Resources/AppIcon-Legacy.icns" \
+             "${TARGET_BUILD_DIR}/${PRODUCT_NAME}.app/Contents/Resources/AppIcon.icns"
     settings:
       base:
         PRODUCT_NAME: TLKit
