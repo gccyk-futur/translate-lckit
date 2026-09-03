@@ -13,3 +13,9 @@ xcuserdata/
 
 # 本地记忆（WorkBuddy 会话状态，不入库）
 .workbuddy/memory/
+
+# AI 助手本地工作约定（开源仓库，约定不入库）
+AGENTS.md
+
+# 本地策划目录（头脑风暴/方案讨论/功能规划，不入库）
+plans.local/
