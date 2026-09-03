@@ -117,6 +117,8 @@ struct SettingsView: View {
     @State private var testingKey: String?
     @State private var testMessage: [String: String] = [:]
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    /// 界面语言改动后提示重启（两个渠道通用，不受 APP_STORE 门控）。
+    @State private var languageRestartNeeded = false
 
     private var accessibilityGranted: Bool {
         _ = permissionRefreshID
@@ -211,6 +213,38 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
                 .help("跟随系统将随 macOS 外观自动切换；浅色/深色强制指定")
+            }
+
+            Section("语言") {
+                Picker("界面语言", selection: Binding(
+                    get: { config.current.language },
+                    set: { lang in
+                        config.update { $0.language = lang }
+                        lang.apply()
+                        languageRestartNeeded = true
+                    }
+                )) {
+                    ForEach(AppLanguage.allCases, id: \.self) { lang in
+                        Text(lang.label).tag(lang)
+                    }
+                }
+                .help("跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效")
+
+                if languageRestartNeeded {
+                    HStack {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundStyle(.blue)
+                        Text("界面语言将在重启 TLKit 后生效。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("重启 TLKit") {
+                            restartApplication()
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
             }
 
             #if !APP_STORE
