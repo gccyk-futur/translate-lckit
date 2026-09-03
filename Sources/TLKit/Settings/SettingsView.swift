@@ -83,7 +83,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return TLKitLocalization.string("通用")
-        case .services: return TLKitLocalization.string("翻译服务")
+        case .services: return TLKitLocalization.string("翻译引擎")
         case .voiceHistory: return TLKitLocalization.string("语音与历史")
         case .privacy: return TLKitLocalization.string("隐私")
         case .about: return TLKitLocalization.string("关于")
@@ -371,8 +371,9 @@ struct SettingsView: View {
 
     private var servicesPane: some View {
         Form {
-            Section("翻译服务") {
-                Picker("服务", selection: Binding(
+            // 引擎与目标语言分开放：选「用谁翻」和「翻成什么」是两件事，混在一个区会互相误解。
+            Section("翻译引擎") {
+                Picker("引擎", selection: Binding(
                     get: { config.current.service },
                     set: { kind in config.update { $0.service = kind } }
                 )) {
@@ -380,7 +381,9 @@ struct SettingsView: View {
                         Text(kind.label).tag(kind)
                     }
                 }
+            }
 
+            Section("目标语言") {
                 #if APP_STORE
                 // 商店版无划词取词（审核条款 2.4.5），此设置仅用于历史「重新翻译」。
                 Picker("默认翻译为", selection: targetLanguageBinding) {
@@ -390,9 +393,6 @@ struct SettingsView: View {
                     Text("自定义…").tag(Self.customLanguageTag)
                 }
                 .help("历史记录「重新翻译」时的目标语言")
-                Text("受 App Store 沙箱安全机制限制，商店版无法自动获取选中的文字：按快捷键呼出面板后 ⌘V 粘贴即可翻译。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 #else
                 Picker("划词翻译为", selection: targetLanguageBinding) {
                     ForEach(Self.commonLanguages, id: \.code) { lang in
@@ -409,9 +409,7 @@ struct SettingsView: View {
                         set: { lang in config.update { $0.targetLanguage = lang } }
                     ), prompt: Text("如 zh / en / ja"))
                 }
-            }
 
-            Section("输入翻译") {
                 Picker("面板翻译为", selection: Binding(
                     get: { config.current.panelTargetLanguage },
                     set: { lang in config.update { $0.panelTargetLanguage = lang } }
@@ -420,7 +418,13 @@ struct SettingsView: View {
                         Text(lang.label).tag(lang.code)
                     }
                 }
-                .help("输入面板的目标语言；源语言始终自动检测。面板顶栏改动会同步到这里")
+                .help("输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定")
+
+                #if APP_STORE
+                Text("受 App Store 沙箱安全机制限制，商店版无法自动获取选中的文字：按快捷键呼出面板后 ⌘V 粘贴即可翻译。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                #endif
             }
 
             switch config.current.service {
@@ -757,7 +761,7 @@ struct SettingsView: View {
         Task {
             do {
                 let service = try ServiceFactory.make(kind)
-                let result = try await service.translate("Hello", to: config.current.targetLanguage)
+                let result = try await service.translate("Hello", from: nil, to: config.current.targetLanguage)
                 testMessage[kind.rawValue] = TLKitLocalization.format("✓ 译文：%@", result)
             } catch {
                 testMessage[kind.rawValue] = error.localizedDescription

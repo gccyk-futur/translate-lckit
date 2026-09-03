@@ -8,9 +8,9 @@ import Translation
 struct SystemTranslator: TranslationService {
     let displayName = TLKitLocalization.string("系统翻译")
 
-    func translate(_ text: String, to target: String) async throws -> String {
-        // 直接 init 必须显式给出源语言，用 NaturalLanguage 检测，失败回退英语。
-        let sourceCode = LanguageCatalog.detect(text)
+    func translate(_ text: String, from source: String?, to target: String) async throws -> String {
+        // 直接 init 必须显式给出源语言：手动指定优先，否则 NaturalLanguage 检测，失败回退英语。
+        let sourceCode = source ?? LanguageCatalog.detect(text)
         let session = TranslationSession(
             installedSource: Locale.Language(identifier: sourceCode),
             target: Locale.Language(identifier: target)

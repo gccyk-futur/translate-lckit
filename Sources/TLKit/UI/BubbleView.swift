@@ -3,7 +3,7 @@ import SwiftUI
 /// 气泡状态机。
 enum BubbleState {
     case loading(source: String)
-    case result(source: String, translation: String, service: String, truncated: Bool)
+    case result(source: String, translation: String, service: String, truncated: Bool, sourceLang: String, targetLang: String)
     case error(message: String)
     case noSelection
     case permissionNeeded
@@ -59,7 +59,7 @@ struct BubbleView: View {
                 sourceLine(source)
             }
 
-        case .result(let source, let translation, let service, let truncated):
+        case .result(let source, let translation, let service, let truncated, let sourceLang, let targetLang):
             VStack(alignment: .leading, spacing: TLStyle.space2) {
                 // 原文：次要层级，小字摘录
                 Text(truncated ? source + TLKitLocalization.string(" …（已截断）") : source)
@@ -81,7 +81,9 @@ struct BubbleView: View {
                 .frame(maxHeight: 300)
 
                 HStack(spacing: TLStyle.space1) {
-                    Text("TLKit × \(service)")
+                    // 语言对可见（用户诉求：划词结果要知道翻的是什么）；保持只读，
+                    // 要控制（改语言/手动指定源语言）走「详细对照」进输入面板。
+                    Text("\(LanguageCatalog.name(for: sourceLang)) → \(LanguageCatalog.name(for: targetLang)) · TLKit × \(service)")
                         .font(TLStyle.footnote)
                         .foregroundStyle(.tertiary)
                     Spacer()

@@ -192,7 +192,6 @@
 "输入文字后切到「详细」，逐句对照翻译" = "Text eingeben, dann zu „Detailliert“ wechseln, um Satz für Satz zu übersetzen";
 "输入翻译" = "Eingabeübersetzung";
 "输入要翻译的文字" = "Zu übersetzenden Text eingeben";
-"输入面板的目标语言；源语言始终自动检测。面板顶栏改动会同步到这里" = "Zielsprache des Eingabefensters; die Ausgangssprache wird immer automatisch erkannt. Änderungen in der oberen Leiste des Fensters werden hierher synchronisiert";
 "退出" = "Beenden";
 "退出 TLKit" = "TLKit beenden";
 "退出后全局快捷键与翻译面板将不可用。" = "Nach dem Beenden sind das globale Kürzel und die Übersetzungsfenster nicht verfügbar.";

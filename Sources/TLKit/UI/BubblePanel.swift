@@ -247,7 +247,7 @@ final class BubblePanelController {
                 let text: String? = MainActor.assumeIsolated {
                     switch self?.currentState {
                     case .loading(let source): return source
-                    case .result(let source, _, _, _): return source
+                    case .result(let source, _, _, _, _, _): return source
                     default: return nil
                     }
                 }

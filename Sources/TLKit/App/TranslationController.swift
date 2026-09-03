@@ -134,11 +134,12 @@ final class TranslationController: ObservableObject {
 
         let target = ConfigStore.shared.current.targetLanguage
         do {
-            let translation = try await service.translate(text, to: target)
+            let translation = try await service.translate(text, from: nil, to: target)
             guard !Task.isCancelled else { return }
             bubble.show(
                 .result(source: text, translation: translation,
-                        service: service.displayName, truncated: truncated),
+                        service: service.displayName, truncated: truncated,
+                        sourceLang: Self.detectLanguage(from: text), targetLang: target),
                 at: mouse
             )
             // 成功即入历史（滚动淘汰在 HistoryStore 内部处理）。

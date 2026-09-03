@@ -1,9 +1,10 @@
 import Foundation
 
 /// 翻译服务统一协议。
+/// - source 为 nil 时各服务自动检测源语言；非 nil 为面板手动指定的语言码。
 protocol TranslationService: Sendable {
     var displayName: String { get }
-    func translate(_ text: String, to target: String) async throws -> String
+    func translate(_ text: String, from source: String?, to target: String) async throws -> String
 }
 
 enum TranslationError: LocalizedError {

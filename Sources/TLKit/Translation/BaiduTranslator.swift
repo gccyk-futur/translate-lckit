@@ -20,7 +20,7 @@ struct BaiduTranslator: TranslationService {
         }
     }
 
-    func translate(_ text: String, to target: String) async throws -> String {
+    func translate(_ text: String, from source: String?, to target: String) async throws -> String {
         let token = try await BaiduTokenStore.shared.getToken(apiKey: apiKey, secretKey: secretKey)
 
         guard let url = URL(string: "https://aip.baidubce.com/rpc/2.0/mt/texttrans/v1?access_token=\(Self.percentEncode(token))") else {
@@ -33,7 +33,8 @@ struct BaiduTranslator: TranslationService {
 
         let body: [String: String] = [
             "q": text,
-            "from": "auto",
+            // 面板手动指定的源语言优先；否则 auto 由服务端检测。
+            "from": source.map { Self.baiduCode(for: $0) } ?? "auto",
             "to": Self.baiduCode(for: target),
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

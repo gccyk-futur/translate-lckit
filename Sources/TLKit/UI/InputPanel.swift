@@ -44,15 +44,24 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    /// 手动指定的源语言码（nil = 自动检测）；纠正检测误判用，清空输入时重置。
+    @Published var sourceOverride: String? = nil
+
+    /// 生效的源语言：手动指定优先，否则自动检测结果。
+    var effectiveSourceCode: String? {
+        sourceOverride ?? detectedSourceCode
+    }
+
     /// 当前输入的检测语言（NaturalLanguage，离线）；空输入为 nil。
     var detectedSourceCode: String? {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : LanguageCatalog.detect(text)
     }
 
-    /// 源语言展示名：检测到则显示语言名，否则「自动检测」。
+    /// 源语言展示名：手动指定 > 检测结果 > 「自动检测」。
     var sourceDisplayLabel: String {
-        detectedSourceCode.map { LanguageCatalog.name(for: $0) } ?? TLKitLocalization.string("自动检测")
+        if let sourceOverride { return LanguageCatalog.name(for: sourceOverride) }
+        return detectedSourceCode.map { LanguageCatalog.name(for: $0) } ?? TLKitLocalization.string("自动检测")
     }
 
     /// 展示模式；切换时窗口尺寸随之变化（同窗口内切换）。
@@ -130,6 +139,9 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
                 }
             }
         }
+        // 与设置页保持同步：面板控制器是启动时预热的单例，
+        // 设置里改「面板翻译为」后这里重新读，否则面板显示旧值。
+        targetLanguage = ConfigStore.shared.current.panelTargetLanguage
         // 激活 TLKit：外部输入工具（语音输入、输入法等）只会把文本送给活跃应用，
         // 不激活则面板拿不到它们的输出；关闭时归还焦点给原前台应用。
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -144,8 +156,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
     /// 关闭面板。
     /// - Parameter clearDraft: 主动关闭（Esc / ⌘W / 红色关闭键 / 快捷键 toggle）传 true 清空内容；
     ///   失焦被动关闭传 false 保留现场，避免误触丢稿。
-    func dismiss(clearDraft: Bool = true) {
-        translateTask?.cancel()
+    func dismiss(clearDraft: Bool = true) {        translateTask?.cancel()
         detailedTask?.cancel()
         removeKeyMonitor()
         SpeechManager.shared.stop()
@@ -158,6 +169,14 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
             previousApp.activate()
         }
         previousApp = nil
+    }
+
+    /// 失焦关闭兜底（NSWindowDelegate）：didResignActive 在激活竞态下可能不发；
+    /// 面板曾是 key 时，resignKey 且 TLKit 已非活跃 → 判定为用户切走，关闭并保留现场。
+    /// TLKit 活跃时的 resignKey（如打开设置窗）不触发。
+    func windowDidResignKey(_ notification: Notification) {
+        guard isVisible, !NSApp.isActive else { return }
+        dismiss(clearDraft: false)
     }
 
     // MARK: - 翻译
@@ -179,7 +198,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
 
             do {
                 let service = try ServiceFactory.makeActive()
-                let translation = try await service.translate(sourceText, to: target)
+                let translation = try await service.translate(sourceText, from: sourceOverride, to: target)
                 guard !Task.isCancelled else { return }
                 self.resultText = translation
                 self.isLoading = false
@@ -203,7 +222,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
     /// 「⇄」交换（Google 翻译式）：译文变原文重新翻译，目标语言换成原输入的检测语言。
     /// 无译文或源语言与目标相同时不可用。
     func swapLanguages() {
-        guard !resultText.isEmpty, let source = detectedSourceCode, source != targetLanguage else { return }
+        guard !resultText.isEmpty, let source = effectiveSourceCode, source != targetLanguage else { return }
         inputText = resultText
         resultText = ""
         targetLanguage = source
@@ -218,6 +237,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
         resultText = ""
         errorMessage = nil
         pairs = []
+        sourceOverride = nil
     }
 
     func copyResult() {
@@ -238,7 +258,11 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
         debounceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            self?.translate()
+            if self?.mode == .detailed {
+                self?.translateDetailed()
+            } else {
+                self?.translate()
+            }
         }
     }
 
@@ -267,6 +291,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
                 return
             }
             let target = self.targetLanguage
+            let source = self.sourceOverride
             let count = sentences.count
             await withTaskGroup(of: (Int, String?).self) { group in
                 var submitted = 0
@@ -275,7 +300,7 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
                     while inFlight < 4, submitted < count {
                         let index = submitted
                         group.addTask {
-                            (index, try? await service.translate(sentences[index], to: target))
+                            (index, try? await service.translate(sentences[index], from: source, to: target))
                         }
                         submitted += 1
                         inFlight += 1
@@ -486,6 +511,13 @@ struct InputPanelView: View {
         .onChange(of: controller.inputText) { _, _ in
             controller.scheduleAutoTranslate()
         }
+        // 切换目标语言 / 手动指定源语言也应重新翻译（scheduleAutoTranslate 内部对空输入有守卫）。
+        .onChange(of: controller.targetLanguage) { _, _ in
+            controller.scheduleAutoTranslate()
+        }
+        .onChange(of: controller.sourceOverride) { _, _ in
+            controller.scheduleAutoTranslate()
+        }
     }
 
     // MARK: 顶栏（语言方向 + 简洁/详细切换）
@@ -512,11 +544,18 @@ struct InputPanelView: View {
 
     private var languageBar: some View {
         HStack(spacing: 0) {
-            // 源语言始终自动检测，翻译后显示检测结果。
-            Text(controller.sourceDisplayLabel)
-                .font(TLStyle.label)
-                .foregroundStyle(controller.detectedSourceCode == nil ? .tertiary : .primary)
-                .frame(maxWidth: .infinity)
+            // 源语言：默认自动检测（检测到即展示结果），误判时可手动指定；仅本次面板有效。
+            Picker("源语言", selection: $controller.sourceOverride) {
+                Text(controller.sourceDisplayLabel).tag(String?.none)
+                ForEach(LanguageCatalog.all, id: \.code) { lang in
+                    Text(lang.name).tag(String?.some(lang.code))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity)
+            .help("默认自动检测源语言；检测不准时可手动指定，仅本次面板有效")
+            .accessibilityLabel("源语言")
             Button {
                 controller.swapLanguages()
             } label: {
@@ -563,7 +602,7 @@ struct InputPanelView: View {
                 Button {
                     SpeechManager.shared.toggle(
                         text: controller.inputText,
-                        language: controller.detectedSourceCode ?? "en"
+                        language: controller.effectiveSourceCode ?? "en"
                     )
                 } label: {
                     Image(systemName: "speaker.wave.2")

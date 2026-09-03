@@ -192,7 +192,6 @@
 "输入文字后切到「详细」，逐句对照翻译" = "Enter text, then switch to “Detailed” for sentence-by-sentence translation";
 "输入翻译" = "Input Translation";
 "输入要翻译的文字" = "Enter text to translate";
-"输入面板的目标语言；源语言始终自动检测。面板顶栏改动会同步到这里" = "Target language for the input panel; the source language is always auto-detected. Changes in the panel's top bar sync back here";
 "退出" = "Quit";
 "退出 TLKit" = "Quit TLKit";
 "退出后全局快捷键与翻译面板将不可用。" = "The global hotkey and translation panels will be unavailable after quitting.";

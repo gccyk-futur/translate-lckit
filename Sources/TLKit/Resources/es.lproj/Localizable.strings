@@ -192,7 +192,6 @@
 "输入文字后切到「详细」，逐句对照翻译" = "Escribe texto y cambia a «Detallado» para una traducción frase por frase";
 "输入翻译" = "Traducción de entrada";
 "输入要翻译的文字" = "Escribe el texto a traducir";
-"输入面板的目标语言；源语言始终自动检测。面板顶栏改动会同步到这里" = "Idioma de destino del panel de entrada; el idioma de origen siempre se detecta automáticamente. Los cambios en la barra superior del panel se sincronizan aquí";
 "退出" = "Salir";
 "退出 TLKit" = "Salir de TLKit";
 "退出后全局快捷键与翻译面板将不可用。" = "Al salir, el atajo global y los paneles de traducción dejarán de estar disponibles.";
