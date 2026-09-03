@@ -776,17 +776,28 @@ struct SettingsView: View {
         #endif
     }
 
-    #if !APP_STORE
+    /// 重启应用：语言切换等需要重启生效的场景通用。
+    /// 注意：对正在运行的自己直接 openApplication 只会被激活、不会启动新实例
+    ///（LaunchServices 日志 "launch 0 items"），随后 terminate 就把 App 彻底弄没了。
     private func restartApplication() {
         let url = Bundle.main.bundleURL
+        #if APP_STORE
+        // 沙盒禁止派生子进程：先强制拉起新实例，完成回调里再退出本进程。
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in
             NSApp.terminate(nil)
         }
+        #else
+        // 直装版：派生独立的延迟 open 子进程，本进程退出后由它拉起新实例。
+        let task = Process()
+        task.launchPath = "/bin/sh"
+        task.arguments = ["-c", "sleep 1 && open -n \"\(url.path)\""]
+        try? task.run()
+        NSApp.terminate(nil)
+        #endif
     }
-    #endif
 }
 
 /// 快捷键录制控件：点击进入录制，按下带修饰键的组合即录入；Esc 取消。

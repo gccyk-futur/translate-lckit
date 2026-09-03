@@ -153,6 +153,41 @@ struct TTSConfig: Codable, Equatable {
 }
 
 /// 应用配置（持久化为 Application Support/TLKit/config.json）。
+/// 界面语言：跟随系统或强制指定。改动写入 AppleLanguages 默认项，重启后生效。
+enum AppLanguage: String, Codable, CaseIterable {
+    case system
+    case zhHans = "zh-Hans"
+    case zhHant = "zh-Hant"
+    case en, de, es, fr, it, ja, ko
+    case ptBR = "pt-BR"
+
+    /// 语言名用各语言自称（语言列表惯例）；「跟随系统」随界面语言。
+    var label: String {
+        switch self {
+        case .system: return TLKitLocalization.string("跟随系统")
+        case .zhHans: return "简体中文"
+        case .zhHant: return "繁體中文"
+        case .en: return "English"
+        case .de: return "Deutsch"
+        case .es: return "Español"
+        case .fr: return "Français"
+        case .it: return "Italiano"
+        case .ja: return "日本語"
+        case .ko: return "한국어"
+        case .ptBR: return "Português (Brasil)"
+        }
+    }
+
+    /// 写入 AppleLanguages 覆盖；system 则移除覆盖（跟随 macOS）。重启后生效。
+    func apply() {
+        if self == .system {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set([rawValue], forKey: "AppleLanguages")
+        }
+    }
+}
+
 struct AppConfig: Codable, Equatable {
     var hotkey: Shortcut = .default
     /// 面板内「朗读」快捷键（默认 ⌘R）。
@@ -175,6 +210,8 @@ struct AppConfig: Codable, Equatable {
     var panelTargetLanguage: String = "zh"
     /// 外观模式：跟随系统 / 浅色 / 深色。
     var appearance: AppearanceMode = .system
+    /// 界面语言：跟随系统 / 强制指定（写入 AppleLanguages，重启后生效）。
+    var language: AppLanguage = .system
     /// 辅助功能「不再提醒」：true 时快捷键无权限不再弹提示，直开输入面板。
     var suppressPermissionHint: Bool = false
     /// 气泡内快捷键提示「不再提示」：true 时结果气泡不再显示快捷键小字行。
@@ -199,6 +236,7 @@ struct AppConfig: Codable, Equatable {
         tts = try c.decodeIfPresent(TTSConfig.self, forKey: .tts) ?? d.tts
         panelTargetLanguage = try c.decodeIfPresent(String.self, forKey: .panelTargetLanguage) ?? d.panelTargetLanguage
         appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? d.appearance
+        language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? d.language
         suppressPermissionHint = try c.decodeIfPresent(Bool.self, forKey: .suppressPermissionHint) ?? d.suppressPermissionHint
         suppressBubbleHints = try c.decodeIfPresent(Bool.self, forKey: .suppressBubbleHints) ?? d.suppressBubbleHints
     }

@@ -211,3 +211,7 @@
 "面板翻译为" = "Fenstereingabe übersetzen in";
 "韩语" = "Koreanisch";
 "默认翻译为" = "Standardmäßig übersetzen in";
+"语言" = "Sprache";
+"界面语言" = "App-Sprache";
+"界面语言将在重启 TLKit 后生效。" = "Die App-Sprache wird nach einem Neustart von TLKit wirksam.";
+"跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效" = "„Systemsprache“ verwendet die macOS-Sprache; eine bestimmte Sprache erzwingt die Anzeige und wirkt nach einem Neustart";

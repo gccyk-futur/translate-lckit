@@ -211,3 +211,7 @@
 "面板翻译为" = "Traduci input pannello in";
 "韩语" = "Coreano";
 "默认翻译为" = "Traduci in per default";
+"语言" = "Lingua";
+"界面语言" = "Lingua dell'app";
+"界面语言将在重启 TLKit 后生效。" = "La lingua dell'app sarà attiva dopo il riavvio di TLKit.";
+"跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效" = "«Come il sistema» usa la lingua preferita di macOS; scegliendo una lingua l'interfaccia la forza, attiva dopo il riavvio";

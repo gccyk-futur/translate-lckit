@@ -211,3 +211,7 @@
 "面板翻译为" = "Translate Panel Input Into";
 "韩语" = "Korean";
 "默认翻译为" = "Translate Into by Default";
+"语言" = "Language";
+"界面语言" = "Interface Language";
+"界面语言将在重启 TLKit 后生效。" = "The interface language will take effect after restarting TLKit.";
+"跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效" = "Follow System uses the macOS preferred language; choosing a specific language forces the interface into it and takes effect after restart";
