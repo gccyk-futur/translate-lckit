@@ -214,3 +214,8 @@
 "界面语言" = "Interface Language";
 "界面语言将在重启 TLKit 后生效。" = "The interface language will take effect after restarting TLKit.";
 "跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效" = "Follow System uses the macOS preferred language; choosing a specific language forces the interface into it and takes effect after restart";
+"源语言" = "Source Language";
+"默认自动检测源语言；检测不准时可手动指定，仅本次面板有效" = "The source language is auto-detected by default; if detection is wrong, set it manually — applies to this panel only";
+"翻译引擎" = "Translation Engine";
+"输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Target language for the input panel; the source language is auto-detected and can be set manually in the panel's top bar";
+"窗口" = "Window";

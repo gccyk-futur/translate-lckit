@@ -19,7 +19,7 @@ enum SettingsWindow {
             return
         }
         let hosting = NSHostingController(rootView: SettingsView())
-        let window = NSWindow(contentViewController: hosting)
+        let window = ToolWindow(contentViewController: hosting)
         window.title = TLKitLocalization.string("TLKit 设置")
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(NSSize(width: 760, height: 540))

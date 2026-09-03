@@ -150,6 +150,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(makeItem(TLKitLocalization.string("退出 TLKit"), action: #selector(confirmQuit), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
+        // 窗口菜单：⌘W 关闭。target 留 nil 走响应链，由当前 key window 的 performClose: 接收。
+        let windowMenuItem = NSMenuItem()
+        mainMenu.addItem(windowMenuItem)
+        let windowMenu = NSMenu(title: TLKitLocalization.string("窗口"))
+        windowMenu.addItem(NSMenuItem(title: TLKitLocalization.string("关闭"),
+                                      action: #selector(NSWindow.performClose(_:)),
+                                      keyEquivalent: "w"))
+        windowMenuItem.submenu = windowMenu
         NSApp.mainMenu = mainMenu
     }
 

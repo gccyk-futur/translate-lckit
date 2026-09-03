@@ -214,3 +214,8 @@
 "界面语言" = "App-Sprache";
 "界面语言将在重启 TLKit 后生效。" = "Die App-Sprache wird nach einem Neustart von TLKit wirksam.";
 "跟随系统使用 macOS 首选语言；指定语言后界面强制以该语言显示，重启生效" = "„Systemsprache“ verwendet die macOS-Sprache; eine bestimmte Sprache erzwingt die Anzeige und wirkt nach einem Neustart";
+"源语言" = "Ausgangssprache";
+"默认自动检测源语言；检测不准时可手动指定，仅本次面板有效" = "Die Ausgangssprache wird automatisch erkannt; bei Fehlerkennung manuell wählbar — gilt nur für dieses Panel";
+"翻译引擎" = "Übersetzungs-Engine";
+"输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Zielsprache des Eingabepanels; die Ausgangssprache wird automatisch erkannt und kann in der Panelleiste manuell gesetzt werden";
+"窗口" = "Fenster";

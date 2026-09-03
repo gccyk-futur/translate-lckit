@@ -9,7 +9,7 @@ enum HistoryWindow {
     static func present() {
         if controller == nil {
             let hosting = NSHostingController(rootView: HistoryView())
-            let window = NSWindow(contentViewController: hosting)
+            let window = ToolWindow(contentViewController: hosting)
             window.title = TLKitLocalization.string("TLKit · 翻译历史")
             window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
             window.setContentSize(NSSize(width: 760, height: 480))
