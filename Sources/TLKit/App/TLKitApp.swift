@@ -74,14 +74,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(makeItem(TLKitLocalization.string("输入翻译"), action: #selector(showInputPanel)))
+        // 「翻译为」快切：改的是「翻译为」清单的默认槽，与设置页/输入面板同源。
+        let translateToItem = NSMenuItem(title: TLKitLocalization.string("翻译为"), action: nil, keyEquivalent: "")
+        let translateToMenu = NSMenu()
+        for lang in LanguageCatalog.all {
+            let item = NSMenuItem(title: lang.name, action: #selector(selectTargetLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = lang.code
+            translateToMenu.addItem(item)
+        }
+        translateToItem.submenu = translateToMenu
+        menu.addItem(translateToItem)
         menu.addItem(makeItem(TLKitLocalization.string("翻译历史…"), action: #selector(showHistory)))
         menu.addItem(makeItem(TLKitLocalization.string("设置…"), action: #selector(showSettings)))
         menu.addItem(.separator())
         // 菜单里的退出同样走确认（与 ⌘Q 一致），高频工具防误退。
         menu.addItem(makeItem(TLKitLocalization.string("退出 TLKit"), action: #selector(confirmQuit)))
+        menu.delegate = self
         item.menu = menu
         statusItem = item
         startStatusItemWatchdog()
+    }
+
+    /// 「翻译为」快切：点击即改写默认槽语言（输入面板下次打开即跟随）。
+    @objc private func selectTargetLanguage(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        ConfigStore.shared.setDefaultTargetLanguage(code)
     }
 
     // MARK: - 状态项巡检（K1）
@@ -184,4 +202,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showHistory() { HistoryWindow.present() }
     @objc private func showSettings() { SettingsWindow.present() }
     @objc private func confirmQuit() { QuitGuard.confirm() }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    /// 菜单展开前刷新「翻译为」子菜单的勾选状态（配置可能在设置页/面板里改过）。
+    nonisolated func menuNeedsUpdate(_ menu: NSMenu) {
+        // NSMenuDelegate 回调总在主线程；NSMenu 非 Sendable，装箱断言主线程隔离。
+        let box = UncheckedSendableBox(menu)
+        MainActor.assumeIsolated {
+            let current = ConfigStore.shared.current.defaultTargetLanguage
+            for item in box.value.items {
+                guard let submenu = item.submenu else { continue }
+                for subItem in submenu.items {
+                    guard let code = subItem.representedObject as? String else { continue }
+                    subItem.state = (code == current) ? .on : .off
+                }
+            }
+        }
+    }
+}
+
+/// 把「确定只在主线程使用」的非 Sendable 对象带过隔离边界（如 AppKit 回调参数）。
+private struct UncheckedSendableBox<T>: @unchecked Sendable {
+    let value: T
+    init(_ value: T) { self.value = value }
 }

@@ -2,14 +2,27 @@ import AppKit
 import Foundation
 
 /// 全局快捷键定义：keyCode + Carbon 修饰键掩码（Carbon 掩码可直接用于 RegisterEventHotKey）。
-struct Shortcut: Codable, Equatable {
+struct Shortcut: Codable, Equatable, Hashable {
     var keyCode: UInt32
     var carbonModifiers: UInt32
 
+    /// 空快捷键（未设置）；keyCode == 0 即视为空。
+    static let empty = Shortcut(keyCode: 0, carbonModifiers: 0)
     /// 默认 ⌥D（kVK_ANSI_D = 2，optionKey = 0x800）。
     static let `default` = Shortcut(keyCode: 2, carbonModifiers: 0x800)
     /// 面板内朗读默认 ⌘R（kVK_ANSI_R = 15，cmdKey = 0x100）。
     static let defaultSpeak = Shortcut(keyCode: 15, carbonModifiers: 0x100)
+    /// 面板内朗读原文默认 ⇧⌘R（shiftKey = 0x200 | cmdKey = 0x100）。
+    /// 约定：不加修饰键读译文，加 ⇧ 读原文（气泡的空格 / ⇧空格同理）。
+    static let defaultSpeakSource = Shortcut(keyCode: 15, carbonModifiers: 0x300)
+    /// 气泡内「朗读译文」默认空格（kVK_Space = 49，无修饰键）。
+    static let bubbleSpeak = Shortcut(keyCode: 49, carbonModifiers: 0)
+    /// 气泡内「朗读原文」默认 ⇧空格。
+    static let bubbleSpeakSource = Shortcut(keyCode: 49, carbonModifiers: 0x200)
+    /// 面板内切「简洁模式」默认 ⌘1（kVK_ANSI_1 = 18）。
+    static let panelSimple = Shortcut(keyCode: 18, carbonModifiers: 0x100)
+    /// 面板内切「逐句对照」默认 ⌘2（kVK_ANSI_2 = 19）。
+    static let panelDetailed = Shortcut(keyCode: 19, carbonModifiers: 0x100)
     /// 面板内清空默认 ⌘K（kVK_ANSI_K = 40，cmdKey = 0x100）。
     static let defaultClear = Shortcut(keyCode: 40, carbonModifiers: 0x100)
 
@@ -21,8 +34,9 @@ struct Shortcut: Codable, Equatable {
         return UInt32(keyCode) == self.keyCode && mods == carbonModifiers
     }
 
-    /// 展示用字符串，如 "⌥D"。
+    /// 展示用字符串，如 "⌥D"；空快捷键显示「无」。
     var displayString: String {
+        guard !isEmpty else { return TLKitLocalization.string("无") }
         var s = ""
         if carbonModifiers & 0x1000 != 0 { s += "⌃" } // controlKey
         if carbonModifiers & 0x800 != 0 { s += "⌥" }  // optionKey
@@ -152,6 +166,27 @@ struct TTSConfig: Codable, Equatable {
     }
 }
 
+/// 翻译目标条目：「翻译为」清单中的一行。
+/// 清单第 1 条是固定默认槽（稳定 ID、不可删）：输入面板、状态栏快切、
+/// 历史「重新翻译」等无快捷键上下文都以它为目标语言；其余条目是快捷键预设，
+/// 「设为默认」= 把本条语言写进默认槽（不给本条打标记，避免歧义）。
+struct TranslateTarget: Codable, Equatable, Identifiable {
+    /// 默认槽（清单第 1 条）的稳定 ID。
+    static let defaultSlotID = "default"
+
+    var id: String
+    /// 目标语言代码（如 zh / en / ja）。
+    var language: String
+    /// 全局快捷键；isEmpty = 无快捷键（允许清空）。
+    var hotkey: Shortcut
+
+    init(id: String = UUID().uuidString, language: String, hotkey: Shortcut = .empty) {
+        self.id = id
+        self.language = language
+        self.hotkey = hotkey
+    }
+}
+
 /// 应用配置（持久化为 Application Support/TLKit/config.json）。
 /// 界面语言：跟随系统或强制指定。改动写入 AppleLanguages 默认项，重启后生效。
 enum AppLanguage: String, Codable, CaseIterable {
@@ -189,15 +224,30 @@ enum AppLanguage: String, Codable, CaseIterable {
 }
 
 struct AppConfig: Codable, Equatable {
-    var hotkey: Shortcut = .default
-    /// 面板内「朗读」快捷键（默认 ⌘R）。
+    /// 「翻译为」清单：第 1 条是固定默认槽（不可删），其余为快捷键预设。
+    /// 2026-09 起启用的新模型：不迁移老配置键（hotkey / targetLanguage /
+    /// panelTargetLanguage 已废弃，解码时直接忽略）。
+    var translateTargets: [TranslateTarget] = [
+        TranslateTarget(id: TranslateTarget.defaultSlotID, language: "zh", hotkey: .default)
+    ]
+    /// 面板内「朗读译文」快捷键（默认 ⌘R）。
     var panelSpeakHotkey: Shortcut = .defaultSpeak
+    /// 面板内「朗读原文」快捷键（默认 ⇧⌘R）。
+    var panelSpeakSourceHotkey: Shortcut = .defaultSpeakSource
+    /// 气泡内「朗读译文」快捷键（默认空格，可在设置中改）。
+    var bubbleSpeakHotkey: Shortcut = .bubbleSpeak
+    /// 气泡内「朗读原文」快捷键（默认 ⇧空格，可在设置中改）。
+    var bubbleSpeakSourceHotkey: Shortcut = .bubbleSpeakSource
+    /// 面板内「简洁模式」快捷键（默认 ⌘1，可在设置中改）。
+    var panelSimpleModeHotkey: Shortcut = .panelSimple
+    /// 面板内「逐句对照」快捷键（默认 ⌘2，可在设置中改）。
+    var panelDetailedModeHotkey: Shortcut = .panelDetailed
+    /// 气泡「打开面板」按钮目标：true = 逐句对照（详细），false = 简洁模式。
+    var bubbleOpensDetailed: Bool = true
     /// 面板内「清空输入」快捷键（默认 ⌘K）。
     var panelClearHotkey: Shortcut = .defaultClear
     /// 气泡自动消失秒数；0 = 不自动消失。
     var autoDismissSeconds: Int = 8
-    /// 翻译目标语言（百度语种代码，如 zh / en）。
-    var targetLanguage: String = "zh"
     var service: ServiceKind = .system
     var baidu: BaiduConfig = .init()
     var openai: OpenAIConfig = .init()
@@ -206,8 +256,6 @@ struct AppConfig: Codable, Equatable {
     var historyMaxCount: Int = 500
     /// TTS 配置。
     var tts: TTSConfig = .init()
-    /// 输入面板目标语言（通用两字母码；随用户改动持久化）。
-    var panelTargetLanguage: String = "zh"
     /// 外观模式：跟随系统 / 浅色 / 深色。
     var appearance: AppearanceMode = .system
     /// 界面语言：跟随系统 / 强制指定（写入 AppleLanguages，重启后生效）。
@@ -223,23 +271,45 @@ struct AppConfig: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = AppConfig()
-        hotkey = try c.decodeIfPresent(Shortcut.self, forKey: .hotkey) ?? d.hotkey
+        var targets = try c.decodeIfPresent([TranslateTarget].self, forKey: .translateTargets) ?? d.translateTargets
+        if targets.isEmpty {
+            targets = d.translateTargets
+        } else {
+            // 默认槽 ID 锚定：防止手工编辑配置后「第 1 条即默认」的语义漂移。
+            targets[0].id = TranslateTarget.defaultSlotID
+        }
+        translateTargets = targets
         panelSpeakHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelSpeakHotkey) ?? d.panelSpeakHotkey
+        panelSpeakSourceHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelSpeakSourceHotkey) ?? d.panelSpeakSourceHotkey
+        bubbleSpeakHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .bubbleSpeakHotkey) ?? d.bubbleSpeakHotkey
+        bubbleSpeakSourceHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .bubbleSpeakSourceHotkey) ?? d.bubbleSpeakSourceHotkey
+        panelSimpleModeHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelSimpleModeHotkey) ?? d.panelSimpleModeHotkey
+        panelDetailedModeHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelDetailedModeHotkey) ?? d.panelDetailedModeHotkey
+        bubbleOpensDetailed = try c.decodeIfPresent(Bool.self, forKey: .bubbleOpensDetailed) ?? d.bubbleOpensDetailed
         panelClearHotkey = try c.decodeIfPresent(Shortcut.self, forKey: .panelClearHotkey) ?? d.panelClearHotkey
         autoDismissSeconds = try c.decodeIfPresent(Int.self, forKey: .autoDismissSeconds) ?? d.autoDismissSeconds
-        targetLanguage = try c.decodeIfPresent(String.self, forKey: .targetLanguage) ?? d.targetLanguage
         service = try c.decodeIfPresent(ServiceKind.self, forKey: .service) ?? d.service
         baidu = try c.decodeIfPresent(BaiduConfig.self, forKey: .baidu) ?? d.baidu
         openai = try c.decodeIfPresent(OpenAIConfig.self, forKey: .openai) ?? d.openai
         ollama = try c.decodeIfPresent(OllamaConfig.self, forKey: .ollama) ?? d.ollama
         historyMaxCount = try c.decodeIfPresent(Int.self, forKey: .historyMaxCount) ?? d.historyMaxCount
         tts = try c.decodeIfPresent(TTSConfig.self, forKey: .tts) ?? d.tts
-        panelTargetLanguage = try c.decodeIfPresent(String.self, forKey: .panelTargetLanguage) ?? d.panelTargetLanguage
         appearance = try c.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? d.appearance
         language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? d.language
         suppressPermissionHint = try c.decodeIfPresent(Bool.self, forKey: .suppressPermissionHint) ?? d.suppressPermissionHint
         suppressBubbleHints = try c.decodeIfPresent(Bool.self, forKey: .suppressBubbleHints) ?? d.suppressBubbleHints
     }
+}
+
+extension AppConfig {
+    /// 默认槽（清单第 1 条）：无快捷键上下文的目标语言来源。
+    var defaultTarget: TranslateTarget {
+        translateTargets.first
+            ?? TranslateTarget(id: TranslateTarget.defaultSlotID, language: "zh", hotkey: .default)
+    }
+
+    /// 默认目标语言：输入面板、状态栏快切、历史「重新翻译」共用。
+    var defaultTargetLanguage: String { defaultTarget.language }
 }
 
 /// Keychain 存储键。
@@ -277,6 +347,19 @@ final class ConfigStore: ObservableObject {
     func update(_ mutate: (inout AppConfig) -> Void) {
         mutate(&current)
         save()
+    }
+
+    /// 改写默认槽语言：状态栏「翻译为」快切、面板顶栏、「设为默认」共用入口。
+    func setDefaultTargetLanguage(_ language: String) {
+        update { config in
+            if config.translateTargets.isEmpty {
+                config.translateTargets = [
+                    TranslateTarget(id: TranslateTarget.defaultSlotID, language: language, hotkey: .default)
+                ]
+            } else {
+                config.translateTargets[0].language = language
+            }
+        }
     }
 
     private func save() {

@@ -76,13 +76,14 @@ private final class SettingsPolicyDelegate: NSObject, NSWindowDelegate {
 
 /// 设置页签（侧边栏导航项）。
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, services, voiceHistory, privacy, about
+    case general, translation, services, voiceHistory, privacy, about
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return TLKitLocalization.string("通用")
+        case .translation: return TLKitLocalization.string("翻译设置")
         case .services: return TLKitLocalization.string("翻译引擎")
         case .voiceHistory: return TLKitLocalization.string("语音与历史")
         case .privacy: return TLKitLocalization.string("隐私")
@@ -93,6 +94,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: return "gearshape"
+        case .translation: return "character.bubble"
         case .services: return "character.book.closed"
         case .voiceHistory: return "speaker.wave.2"
         case .privacy: return "hand.raised"
@@ -174,6 +176,7 @@ struct SettingsView: View {
     private var paneContent: some View {
         switch selectedPane ?? .general {
         case .general: generalPane
+        case .translation: translationPane
         case .services: servicesPane
         case .voiceHistory: voiceHistoryPane
         case .privacy: privacyPane
@@ -324,22 +327,65 @@ struct SettingsView: View {
             }
             #endif
 
-            Section("快捷键") {
-                LabeledContent(hotkeyActionLabel) {
-                    ShortcutRecorderView(shortcut: Binding(
-                        get: { config.current.hotkey },
-                        set: { newValue in
-                            config.update { $0.hotkey = newValue }
-                            TranslationController.shared.applyHotkeyChange()
-                        }
-                    ))
+        }
+        .formStyle(.grouped)
+        // App 回到前台时刷新权限状态：直装版的权限区块与商店版的彩蛋都靠它。
+        // 挂在 Form 上而非某个 Section——彩蛋 Section 在未授权时不存在，挂它上面永远不会触发。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissionRefreshID = UUID()
+        }
+    }
+
+    /// 翻译设置页：「翻译为」清单（默认槽 + 快捷键预设）、面板快捷键、气泡（仅官方版）。
+    private var translationPane: some View {
+        Form {
+            Section("翻译为") {
+                ForEach(Array(config.current.translateTargets.enumerated()), id: \.element.id) { index, target in
+                    targetRow(index: index, target: target)
                 }
-                LabeledContent("面板内朗读") {
+
+                Button("＋ 添加语言") { addTarget() }
+                    .controlSize(.small)
+
+                #if APP_STORE
+                // 商店版无气泡与取词：条目热键 = 设为默认 + 呼出输入面板。
+                Text("第 1 条为默认目标语言，输入面板始终翻成该语言；为其余条目设置快捷键后，按快捷键会将对应语言设为默认并呼出输入面板。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("受 App Store 沙箱安全机制限制，商店版无法自动获取选中的文字：按快捷键呼出面板后 ⌘V 粘贴即可翻译。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                #else
+                Text("第 1 条为默认目标语言，输入面板与状态栏快切都以它为准；为其余条目设置快捷键后，选中文字按对应快捷键即翻成该语言（不改变默认）。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                #endif
+            }
+
+            Section("面板快捷键") {
+                LabeledContent("朗读译文") {
                     ShortcutRecorderView(shortcut: Binding(
                         get: { config.current.panelSpeakHotkey },
                         set: { newValue in config.update { $0.panelSpeakHotkey = newValue } }
                     ))
-                    .help("气泡为空格键（固定）；输入面板默认 ⌘R，译文优先、无译文读原文")
+                }
+                LabeledContent("朗读原文") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.panelSpeakSourceHotkey },
+                        set: { newValue in config.update { $0.panelSpeakSourceHotkey = newValue } }
+                    ))
+                }
+                LabeledContent("简洁模式") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.panelSimpleModeHotkey },
+                        set: { newValue in config.update { $0.panelSimpleModeHotkey = newValue } }
+                    ))
+                }
+                LabeledContent("逐句对照") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.panelDetailedModeHotkey },
+                        set: { newValue in config.update { $0.panelDetailedModeHotkey = newValue } }
+                    ))
                 }
                 LabeledContent("面板内清空输入") {
                     ShortcutRecorderView(shortcut: Binding(
@@ -349,7 +395,29 @@ struct SettingsView: View {
                 }
             }
 
+            #if !APP_STORE
+            // 气泡是划词翻译的结果载体；App Store 版无取词功能，整区隐藏。
             Section("气泡") {
+                LabeledContent("朗读译文") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.bubbleSpeakHotkey },
+                        set: { newValue in config.update { $0.bubbleSpeakHotkey = newValue } }
+                    ))
+                }
+                LabeledContent("朗读原文") {
+                    ShortcutRecorderView(shortcut: Binding(
+                        get: { config.current.bubbleSpeakSourceHotkey },
+                        set: { newValue in config.update { $0.bubbleSpeakSourceHotkey = newValue } }
+                    ))
+                }
+                Picker("气泡按钮打开", selection: Binding(
+                    get: { config.current.bubbleOpensDetailed },
+                    set: { open in config.update { $0.bubbleOpensDetailed = open } }
+                )) {
+                    Text("逐句对照").tag(true)
+                    Text("简洁模式").tag(false)
+                }
+                .help("气泡上「打开面板」按钮点击后进入的面板形态：逐句对照会按原文重新翻译；简洁模式直接带上气泡里的译文")
                 Picker("自动消失", selection: Binding(
                     get: { config.current.autoDismissSeconds },
                     set: { seconds in config.update { $0.autoDismissSeconds = seconds } }
@@ -360,18 +428,107 @@ struct SettingsView: View {
                     Text("15 秒").tag(15)
                 }
             }
+            #endif
         }
         .formStyle(.grouped)
-        // App 回到前台时刷新权限状态：直装版的权限区块与商店版的彩蛋都靠它。
-        // 挂在 Form 上而非某个 Section——彩蛋 Section 在未授权时不存在，挂它上面永远不会触发。
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            permissionRefreshID = UUID()
+    }
+
+    /// 「翻译为」清单行：语言选择 + 快捷键录制（可清空）+ 设为默认 / 删除。
+    /// 第 1 行是默认槽：带「默认」徽标，不可删除、不提供「设为默认」。
+    @ViewBuilder
+    private func targetRow(index: Int, target: TranslateTarget) -> some View {
+        HStack(spacing: 8) {
+            Picker("", selection: Binding(
+                get: {
+                    config.current.translateTargets.first { $0.id == target.id }?.language ?? target.language
+                },
+                set: { lang in updateTarget(id: target.id) { $0.language = lang } }
+            )) {
+                ForEach(LanguageCatalog.all, id: \.code) { lang in
+                    Text(lang.name).tag(lang.code)
+                }
+                // 配置里出现清单外代码（如手工编辑过 JSON）时原样展示，避免被吞。
+                if !LanguageCatalog.all.contains(where: { $0.code == target.language }) {
+                    Text(target.language).tag(target.language)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 96)
+
+            if index == 0 {
+                Text("默认")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: Capsule())
+            }
+
+            Spacer()
+
+            ShortcutRecorderView(shortcut: Binding(
+                get: {
+                    config.current.translateTargets.first { $0.id == target.id }?.hotkey ?? target.hotkey
+                },
+                set: { newValue in
+                    updateTarget(id: target.id) { $0.hotkey = newValue }
+                    TranslationController.shared.applyHotkeyChange()
+                }
+            ))
+            if !target.hotkey.isEmpty {
+                Button {
+                    updateTarget(id: target.id) { $0.hotkey = .empty }
+                    TranslationController.shared.applyHotkeyChange()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("清空快捷键")
+            }
+
+            if index > 0 {
+                Button("设为默认") { makeDefault(target) }
+                    .controlSize(.small)
+                Button(role: .destructive) { removeTarget(id: target.id) } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("删除")
+            }
         }
+    }
+
+    // MARK: - 翻译为清单操作
+
+    private func updateTarget(id: String, _ mutate: (inout TranslateTarget) -> Void) {
+        config.update { config in
+            guard let index = config.translateTargets.firstIndex(where: { $0.id == id }) else { return }
+            mutate(&config.translateTargets[index])
+        }
+    }
+
+    /// 「设为默认」= 把该条语言写进默认槽（第 1 条），本条保持不变。
+    private func makeDefault(_ target: TranslateTarget) {
+        ConfigStore.shared.setDefaultTargetLanguage(target.language)
+    }
+
+    private func removeTarget(id: String) {
+        config.update { $0.translateTargets.removeAll { $0.id == id } }
+        TranslationController.shared.applyHotkeyChange()
+    }
+
+    /// 添加语言：优先带一个清单里还没出现过的常见语言，减少用户再改一次的动作。
+    private func addTarget() {
+        let used = Set(config.current.translateTargets.map(\.language))
+        let language = LanguageCatalog.all.first { !used.contains($0.code) }?.code ?? "en"
+        config.update { $0.translateTargets.append(TranslateTarget(language: language)) }
     }
 
     private var servicesPane: some View {
         Form {
-            // 引擎与目标语言分开放：选「用谁翻」和「翻成什么」是两件事，混在一个区会互相误解。
+            // 引擎页只管「用谁翻」；「翻成什么」在翻译设置页的「翻译为」清单。
             Section("翻译引擎") {
                 Picker("引擎", selection: Binding(
                     get: { config.current.service },
@@ -381,50 +538,6 @@ struct SettingsView: View {
                         Text(kind.label).tag(kind)
                     }
                 }
-            }
-
-            Section("目标语言") {
-                #if APP_STORE
-                // 商店版无划词取词（审核条款 2.4.5），此设置仅用于历史「重新翻译」。
-                Picker("默认翻译为", selection: targetLanguageBinding) {
-                    ForEach(Self.commonLanguages, id: \.code) { lang in
-                        Text(lang.label).tag(lang.code)
-                    }
-                    Text("自定义…").tag(Self.customLanguageTag)
-                }
-                .help("历史记录「重新翻译」时的目标语言")
-                #else
-                Picker("划词翻译为", selection: targetLanguageBinding) {
-                    ForEach(Self.commonLanguages, id: \.code) { lang in
-                        Text(lang.label).tag(lang.code)
-                    }
-                    Text("自定义…").tag(Self.customLanguageTag)
-                }
-                .help("快捷键取词后翻译成的目标语言（全局生效）")
-                #endif
-
-                if targetLanguageBinding.wrappedValue == Self.customLanguageTag {
-                    TextField("语言代码", text: Binding(
-                        get: { config.current.targetLanguage },
-                        set: { lang in config.update { $0.targetLanguage = lang } }
-                    ), prompt: Text("如 zh / en / ja"))
-                }
-
-                Picker("面板翻译为", selection: Binding(
-                    get: { config.current.panelTargetLanguage },
-                    set: { lang in config.update { $0.panelTargetLanguage = lang } }
-                )) {
-                    ForEach(Self.commonLanguages, id: \.code) { lang in
-                        Text(lang.label).tag(lang.code)
-                    }
-                }
-                .help("输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定")
-
-                #if APP_STORE
-                Text("受 App Store 沙箱安全机制限制，商店版无法自动获取选中的文字：按快捷键呼出面板后 ⌘V 粘贴即可翻译。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                #endif
             }
 
             switch config.current.service {
@@ -505,10 +618,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    /// 模型服务的系统提示词（只读展示，与请求实际使用的一致，随目标语言动态变化）。
+    /// 模型服务的系统提示词（只读展示，与请求实际使用的一致，随默认目标语言动态变化）。
     private var promptSection: some View {
-        Section("提示词（只读 · 随「划词翻译为」变化）") {
-            Text(OpenAICompatibleTranslator.systemPrompt(for: config.current.targetLanguage))
+        Section("提示词（只读 · 随默认目标语言变化）") {
+            Text(OpenAICompatibleTranslator.systemPrompt(for: config.current.defaultTargetLanguage))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -558,7 +671,9 @@ struct SettingsView: View {
                 HStack {
                     Button("试听声音") {
                         // 走 SpeechManager：按当前引擎、声音、语速配置播放。
-                        SpeechManager.shared.toggle(text: "你好，这是朗读试听。", language: "zh")
+                        // 试听语跟随所选声音的语种（试听的本意是听声音效果）。
+                        let sample = sampleUtterance
+                        SpeechManager.shared.toggle(text: sample.text, language: sample.lang)
                     }
                     .controlSize(.small)
                     Spacer()
@@ -708,33 +823,6 @@ struct SettingsView: View {
         ("ko-KR-SunHiNeural", TLKitLocalization.string("SunHi · 韩语女")),
     ]
 
-    // MARK: - 目标语言选择
-
-    private static let customLanguageTag = "__custom__"
-    private static var commonLanguages: [(code: String, label: String)] {
-        [
-            ("zh", TLKitLocalization.string("中文")), ("en", TLKitLocalization.string("英语")),
-            ("ja", TLKitLocalization.string("日语")), ("ko", TLKitLocalization.string("韩语")),
-            ("fr", TLKitLocalization.string("法语")), ("de", TLKitLocalization.string("德语")),
-            ("es", TLKitLocalization.string("西班牙语")), ("ru", TLKitLocalization.string("俄语")),
-            ("pt", TLKitLocalization.string("葡萄牙语")), ("it", TLKitLocalization.string("意大利语")),
-        ]
-    }
-
-    /// 目标语言选择：常见语言下拉 + 「自定义…」回退为代码输入框。
-    private var targetLanguageBinding: Binding<String> {
-        Binding(
-            get: {
-                let value = config.current.targetLanguage
-                return Self.commonLanguages.contains { $0.code == value } ? value : Self.customLanguageTag
-            },
-            set: { newValue in
-                guard newValue != Self.customLanguageTag else { return }
-                config.update { $0.targetLanguage = newValue }
-            }
-        )
-    }
-
     // MARK: - 服务测试
 
     /// 「测试连接」行：发一条短译文 / 试读一句，结果内联展示。
@@ -758,11 +846,15 @@ struct SettingsView: View {
     private func runTranslationTest(_ kind: ServiceKind) {
         testingKey = kind.rawValue
         testMessage[kind.rawValue] = nil
+        let started = Date()
         Task {
             do {
                 let service = try ServiceFactory.make(kind)
-                let result = try await service.translate("Hello", from: nil, to: config.current.targetLanguage)
-                testMessage[kind.rawValue] = TLKitLocalization.format("✓ 译文：%@", result)
+                // 固定语言对后台真实翻译一次，只验证连通性；译文不展示
+                // （「翻成什么」已归「翻译设置」页管，这里只回答「通不通、多快」）。
+                _ = try await service.translate("Hello", from: nil, to: "zh")
+                let elapsed = Date().timeIntervalSince(started)
+                testMessage[kind.rawValue] = TLKitLocalization.format("✓ 连接成功 · 耗时 %.1f 秒", elapsed)
             } catch {
                 testMessage[kind.rawValue] = error.localizedDescription
             }
@@ -773,19 +865,60 @@ struct SettingsView: View {
     private func runAzureTest() {
         testingKey = "azure"
         testMessage["azure"] = nil
+        let sample = sampleUtterance
         Task {
             let service = AzureSpeechService(
                 region: config.current.tts.azureRegion,
                 key: KeychainStore.get(.azureKey) ?? ""
             )
             do {
-                try await service.speak("语音测试。", language: "zh")
+                try await service.speak(sample.text, language: sample.lang)
                 testMessage["azure"] = TLKitLocalization.string("✓ 已播放测试语音")
             } catch {
                 testMessage["azure"] = error.localizedDescription
             }
             testingKey = nil
         }
+    }
+
+    // MARK: - 试听语
+
+    /// 试听语料（按语种）：内容是「你好，这是朗读试听」的各语言版本。
+    /// 不进 Localizable.strings——它必须说目标语言，而不是界面语言。
+    private static let sampleTexts: [String: String] = [
+        "zh": "你好，这是朗读试听。",
+        "en": "Hello! This is a voice preview.",
+        "ja": "こんにちは。音声の試聴です。",
+        "ko": "안녕하세요. 음성 미리듣기입니다.",
+        "fr": "Bonjour ! Ceci est un aperçu de la voix.",
+        "de": "Hallo! Dies ist eine Stimmprobe.",
+        "es": "¡Hola! Esta es una muestra de voz.",
+        "ru": "Здравствуйте! Это образец голоса.",
+        "pt": "Olá! Esta é uma amostra de voz.",
+        "it": "Ciao! Questa è un'anteprima della voce.",
+    ]
+
+    /// 试听语跟随所选声音的语种；选「自动」时跟随界面语言。
+    private var sampleUtterance: (text: String, lang: String) {
+        let lang: String
+        switch config.current.tts.provider {
+        case .azure where !config.current.tts.azureVoice.isEmpty:
+            // Azure 声音 ID 形如 zh-CN-XiaoxiaoNeural。
+            lang = String(config.current.tts.azureVoice.prefix(2))
+        case .system where !config.current.tts.systemVoice.isEmpty:
+            lang = AVSpeechSynthesisVoice(identifier: config.current.tts.systemVoice)
+                .map { String($0.language.prefix(2)) } ?? Self.uiLanguageCode
+        default:
+            lang = Self.uiLanguageCode
+        }
+        return (Self.sampleTexts[lang] ?? Self.sampleTexts["en"]!, lang)
+    }
+
+    /// 界面语言的两字母码（跟随系统时取系统首选语言）。
+    private static var uiLanguageCode: String {
+        let tag = Bundle.main.preferredLocalizations.first
+            ?? Locale.preferredLanguages.first ?? "en"
+        return String(tag.prefix(2))
     }
 
     // MARK: - 关于
@@ -802,15 +935,6 @@ struct SettingsView: View {
         return "App Store"
         #else
         return TLKitLocalization.string("官网版")
-        #endif
-    }
-
-    /// 快捷键动作文案：App Store 版快捷键打开输入面板；直装版模拟 ⌘C 划词取词。
-    private var hotkeyActionLabel: String {
-        #if APP_STORE
-        return TLKitLocalization.string("输入翻译")
-        #else
-        return TLKitLocalization.string("翻译选中内容")
         #endif
     }
 

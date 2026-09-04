@@ -51,14 +51,14 @@ final class BubblePanelController {
     private var localClickMonitor: Any?
     private var globalClickMonitor: Any?
     private var resignObserver: NSObjectProtocol?
-    /// 当前展示的状态（空格键朗读原文需要取其中的 source）。
+    /// 当前展示的状态（空格/⇧空格朗读需要取其中的文本与语言码）。
     private var currentState: BubbleState?
     private var hovering = false
 
-    /// 气泡内朗读按钮回调（由 TranslationController 注入）。
-    var onSpeakRequest: ((String) -> Void)?
-    /// 气泡「详细对照」回调（由 TranslationController 注入）。
-    var onDetailedRequest: ((String) -> Void)?
+    /// 气泡内朗读回调（文本 + 语言码，由 TranslationController 注入）。
+    var onSpeakRequest: ((String, String) -> Void)?
+    /// 气泡「打开面板」回调（原文 + 译文，由 TranslationController 注入）。
+    var onDetailedRequest: ((String, String) -> Void)?
     /// 错误态「翻译设置…」回调（由 TranslationController 注入）。
     var onOpenSettingsRequest: (() -> Void)?
     /// 权限态「不再提醒」回调（由 TranslationController 注入）。
@@ -81,10 +81,10 @@ final class BubblePanelController {
         currentState = state
         hosting?.rootView = BubbleView(state: state, onOpenAccessibility: {
             PermissionGate.openAccessibilitySettings()
-        }, onSpeak: { [weak self] text in
-            MainActor.assumeIsolated { self?.onSpeakRequest?(text) }
-        }, onOpenDetailed: { [weak self] text in
-            MainActor.assumeIsolated { self?.onDetailedRequest?(text) }
+        }, onSpeak: { [weak self] text, lang in
+            MainActor.assumeIsolated { self?.onSpeakRequest?(text, lang) }
+        }, onOpenDetailed: { [weak self] source, translation in
+            MainActor.assumeIsolated { self?.onDetailedRequest?(source, translation) }
         }, onOpenSettings: { [weak self] in
             MainActor.assumeIsolated { self?.onOpenSettingsRequest?() }
         }, onNeverRemindPermission: { [weak self] in
@@ -224,7 +224,9 @@ final class BubblePanelController {
                 try? await Task.sleep(for: .milliseconds(200))
                 if Task.isCancelled { return }
                 guard let self, self.isVisible else { return }
-                if !self.hovering { remaining -= 0.2 }
+                // 悬停暂停倒计时；TTS 播报中同样顺延——消失会连带停止朗读，
+                // 长文本播到一半被掐断（用户 2026-09-04 反馈）。
+                if !self.hovering && !SpeechManager.shared.isSpeaking { remaining -= 0.2 }
             }
             if !Task.isCancelled { self?.dismiss() }
         }
@@ -241,21 +243,38 @@ final class BubblePanelController {
                 MainActor.assumeIsolated { self?.dismiss() }
                 return nil
             }
-            // 空格：朗读原文（等同气泡内的小喇叭按钮）。
-            if event.keyCode == 49 {
-                // 只把 String? 取出隔离域；NSEvent 不可跨隔离传递（非 Sendable）。
-                let text: String? = MainActor.assumeIsolated {
-                    switch self?.currentState {
-                    case .loading(let source): return source
-                    case .result(let source, _, _, _, _, _): return source
-                    default: return nil
-                    }
+            // 朗读译文 / 朗读原文（默认 空格 / ⇧空格，可在设置中改）。
+            let keyCode = event.keyCode
+            let mods = Shortcut.carbonModifiers(
+                from: event.modifierFlags.intersection(.deviceIndependentFlagsMask))
+            // 匹配快捷键 + 取文本都在 MainActor 域内完成；NSEvent 不可跨隔离传递。
+            let outcome: (matched: Bool, utterance: (String, String)?)? = MainActor.assumeIsolated {
+                guard let self else { return (false, nil) }
+                let config = ConfigStore.shared.current
+                let wantSource: Bool
+                if config.bubbleSpeakHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    wantSource = false
+                } else if config.bubbleSpeakSourceHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    wantSource = true
+                } else {
+                    return (false, nil)
                 }
-                guard let text, !text.isEmpty else { return event }
-                MainActor.assumeIsolated { self?.onSpeakRequest?(text) }
-                return nil
+                switch self.currentState {
+                case .loading(let source):
+                    // 翻译中只能读原文（译文还没出来）。
+                    guard !source.isEmpty else { return (true, nil) }
+                    return (true, (source, TranslationController.detectLanguage(from: source)))
+                case .result(let source, let translation, _, _, let sourceLang, let targetLang):
+                    return (true, wantSource ? (source, sourceLang) : (translation, targetLang))
+                default:
+                    return (true, nil)
+                }
             }
-            return event
+            guard let outcome, outcome.matched else { return event }
+            if let utterance = outcome.utterance {
+                MainActor.assumeIsolated { self?.onSpeakRequest?(utterance.0, utterance.1) }
+            }
+            return nil
         }
 
         // 本应用其他窗口上的点击。

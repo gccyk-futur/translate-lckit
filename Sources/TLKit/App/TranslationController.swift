@@ -18,18 +18,23 @@ final class TranslationController: ObservableObject {
 
     /// 启动时注册全局快捷键，并注入气泡内朗读回调。
     func start() {
-        hotkeyManager.onActivate = { [weak self] in self?.translateSelection() }
-        hotkeyManager.register(shortcut: ConfigStore.shared.current.hotkey)
+        hotkeyManager.onActivate = { [weak self] key in self?.translateSelection(targetKey: key) }
+        registerAllHotkeys()
         // 预热面板：提前完成 NSPanel + SwiftUI 视图构建，首次呼出零构建开销。
         bubble.prewarm()
         InputPanelController.shared.prewarm()
-        bubble.onSpeakRequest = { text in
-            SpeechManager.shared.toggle(text: text, language: Self.detectLanguage(from: text))
+        bubble.onSpeakRequest = { text, lang in
+            // 语言码来自翻译状态本身，比再检测一次准（纯汉字日/韩文检测会误判中文）。
+            SpeechManager.shared.toggle(text: text, language: lang)
         }
-        bubble.onDetailedRequest = { [weak self] text in
-            // 收起气泡，把原文送进翻译面板的逐句对照模式。
+        bubble.onDetailedRequest = { [weak self] source, translation in
+            // 收起气泡，按设置偏好打开面板：逐句对照（按原文重翻）或简洁模式（直接带译文）。
             self?.bubble.dismiss()
-            InputPanelController.shared.showDetailed(source: text)
+            if ConfigStore.shared.current.bubbleOpensDetailed {
+                InputPanelController.shared.showDetailed(source: source)
+            } else {
+                InputPanelController.shared.show(source: source, translation: translation)
+            }
         }
         // 错误态引导：直接打开设置（翻译服务页），失败不再是死胡同。
         bubble.onOpenSettingsRequest = {
@@ -43,13 +48,20 @@ final class TranslationController: ObservableObject {
         }
     }
 
-    /// 快捷键配置变更后重新注册。
+    /// 「翻译为」清单或快捷键配置变更后全量重注册。
     func applyHotkeyChange() {
-        hotkeyManager.register(shortcut: ConfigStore.shared.current.hotkey)
+        registerAllHotkeys()
+    }
+
+    /// 把清单里所有非空快捷键注册给 HotkeyManager（条目 ID 作 key）。
+    private func registerAllHotkeys() {
+        let targets = ConfigStore.shared.current.translateTargets
+        hotkeyManager.registerAll(targets.map { (key: $0.id, shortcut: $0.hotkey) })
     }
 
     /// 全局快捷键入口：面板已显示 → 关闭（toggle）；否则尝试取词翻译。
-    func translateSelection() {
+    /// - Parameter targetKey: 触发的清单条目 ID；非默认槽条目携带自己的目标语言。
+    func translateSelection(targetKey: String = TranslateTarget.defaultSlotID) {
         // Toggle 逻辑：气泡或输入面板任一可见时，再按快捷键 = 关闭，不再触发。
         if bubble.isVisible || InputPanelController.shared.isVisible {
             // 取消可能正在进行的翻译，避免其完成后又弹出气泡（复现：loading 中再按关闭）。
@@ -58,19 +70,22 @@ final class TranslationController: ObservableObject {
             InputPanelController.shared.dismiss()
             return
         }
+        let override = ConfigStore.shared.current.translateTargets
+            .first { $0.id == targetKey }?.language
         activeTask?.cancel()
-        activeTask = Task { await run(presetText: nil) }
+        activeTask = Task { await run(presetText: nil, targetOverride: override) }
     }
 
     /// 直接翻译指定文本（历史记录「重新翻译」入口，跳过取词）。
     func translateText(_ text: String) {
         activeTask?.cancel()
-        activeTask = Task { await run(presetText: text) }
+        activeTask = Task { await run(presetText: text, targetOverride: nil) }
     }
 
     // MARK: - 主流程
 
-    private func run(presetText: String?) async {
+    /// - Parameter targetOverride: 触发条目自带的目标语言；nil = 用默认槽语言。
+    private func run(presetText: String?, targetOverride: String?) async {
         // CGEvent 全局坐标（左上角原点），用于气泡定位。
         let mouse = CGEvent(source: nil)?.location ?? CGPoint(x: 200, y: 200)
 
@@ -83,6 +98,11 @@ final class TranslationController: ObservableObject {
             #if APP_STORE
             // App Store 版不申请辅助功能权限（审核条款 2.4.5 禁止将 Accessibility
             // 用于无障碍之外的用途）：快捷键直接打开输入面板，用户粘贴/输入待翻译文本。
+            // 预设条目的热键 = 先把该条语言写进默认槽，再呼出面板。
+            if let targetOverride,
+               targetOverride != ConfigStore.shared.current.defaultTargetLanguage {
+                ConfigStore.shared.setDefaultTargetLanguage(targetOverride)
+            }
             InputPanelController.shared.show()
             return
             #else
@@ -132,7 +152,7 @@ final class TranslationController: ObservableObject {
             return
         }
 
-        let target = ConfigStore.shared.current.targetLanguage
+        let target = targetOverride ?? ConfigStore.shared.current.defaultTargetLanguage
         do {
             let translation = try await service.translate(text, from: nil, to: target)
             guard !Task.isCancelled else { return }

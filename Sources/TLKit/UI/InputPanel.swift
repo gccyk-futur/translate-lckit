@@ -34,11 +34,11 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
 
     @Published var inputText = ""
     @Published var resultText = ""
-    /// 目标语言：跟随配置初始化；用户改动后写回配置，重启后保留。
-    @Published var targetLanguage: String = ConfigStore.shared.current.panelTargetLanguage {
+    /// 目标语言：即「翻译为」清单的默认槽；用户改动后写回默认槽，重启后保留。
+    @Published var targetLanguage: String = ConfigStore.shared.current.defaultTargetLanguage {
         didSet {
             guard targetLanguage != oldValue else { return }
-            ConfigStore.shared.update { $0.panelTargetLanguage = targetLanguage }
+            ConfigStore.shared.setDefaultTargetLanguage(targetLanguage)
         }
     }
     @Published var isLoading = false
@@ -69,7 +69,13 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
         didSet {
             guard oldValue != mode else { return }
             applyFrame(animated: true)
-            if mode == .detailed { translateDetailed() }
+            if mode == .detailed {
+                translateDetailed()
+            } else if resultText.isEmpty {
+                // 详情 → 简洁：逐句译文拼回结果栏，翻译结果不丢（用户 2026-09-04 反馈）。
+                let joined = pairs.compactMap(\.translation).joined(separator: " ")
+                if !joined.isEmpty { resultText = joined }
+            }
         }
     }
     /// 逐句对照数据（详细模式）。
@@ -124,6 +130,20 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
         present()
     }
 
+    /// 气泡「打开面板」（简洁偏好）入口：原文与译文直接带过来，不重复请求引擎。
+    func show(source: String, translation: String) {
+        translateTask?.cancel()
+        detailedTask?.cancel()
+        inputText = source
+        resultText = translation
+        errorMessage = nil
+        isLoading = false
+        pairs = []
+        mode = .simple
+        focusToken += 1
+        present()
+    }
+
     private func present() {
         if panel == nil { buildPanel() }
         // 失焦即关：TLKit 让出活跃状态（点击/⌘Tab 到其他应用）即关闭面板。
@@ -140,8 +160,8 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
             }
         }
         // 与设置页保持同步：面板控制器是启动时预热的单例，
-        // 设置里改「面板翻译为」后这里重新读，否则面板显示旧值。
-        targetLanguage = ConfigStore.shared.current.panelTargetLanguage
+        // 设置里改默认目标语言后这里重新读，否则面板显示旧值。
+        targetLanguage = ConfigStore.shared.current.defaultTargetLanguage
         // 激活 TLKit：外部输入工具（语音输入、输入法等）只会把文本送给活跃应用，
         // 不激活则面板拿不到它们的输出；关闭时归还焦点给原前台应用。
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -437,17 +457,25 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
                 let config = ConfigStore.shared.current
                 // ⌘+Enter 翻译
                 if cmd, keyCode == 36 { self.translate(); return true }
-                // 朗读（默认 ⌘R，可在设置中改）
+                // 朗读译文（默认 ⌘R，可在设置中改）
                 if config.panelSpeakHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
                     self.speakPreferred(); return true
+                }
+                // 朗读原文（默认 ⇧⌘R，可在设置中改）
+                if config.panelSpeakSourceHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    self.speakSource(); return true
                 }
                 // 清空输入（默认 ⌘K，可在设置中改）
                 if config.panelClearHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
                     self.clearInput(); return true
                 }
-                // ⌘1 简洁模式 / ⌘2 详细模式
-                if cmd, keyCode == 18 { self.mode = .simple; return true }
-                if cmd, keyCode == 19 { self.mode = .detailed; return true }
+                // 简洁 / 逐句对照切换（默认 ⌘1 / ⌘2，可在设置中改）
+                if config.panelSimpleModeHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    self.mode = .simple; return true
+                }
+                if config.panelDetailedModeHotkey.matches(keyCode: keyCode, carbonModifiers: mods) {
+                    self.mode = .detailed; return true
+                }
                 // Esc / ⌘W 关闭
                 if keyCode == 53 || (cmd && keyCode == 13) { self.dismiss(); return true }
                 // ⌘Q 退出前确认，防误退
@@ -458,13 +486,27 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
         }
     }
 
-    /// ⌘R 朗读：译文优先，无译文时读原文。
+    /// ⌘R 朗读：译文优先，无译文时读原文；详情模式读拼接后的逐句译文。
     private func speakPreferred() {
+        if mode == .detailed {
+            let joined = pairs.compactMap(\.translation).joined(separator: " ")
+            if !joined.isEmpty {
+                SpeechManager.shared.toggle(text: joined, language: targetLanguage)
+                return
+            }
+        }
         if !resultText.isEmpty {
             SpeechManager.shared.toggle(text: resultText, language: targetLanguage)
         } else if let source = detectedSourceCode {
             SpeechManager.shared.toggle(text: inputText, language: source)
         }
+    }
+
+    /// ⇧⌘R 朗读原文（无输入时静默忽略）。
+    private func speakSource() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        SpeechManager.shared.toggle(text: text, language: effectiveSourceCode ?? "en")
     }
 
     private func removeKeyMonitor() {
@@ -486,6 +528,8 @@ final class InputPanelController: NSObject, ObservableObject, NSWindowDelegate {
 /// 顶栏语言方向 + 交换按钮，输入停顿自动实时翻译。
 struct InputPanelView: View {
     @ObservedObject var controller: InputPanelController
+    // 观察配置：快捷键在设置里改过后，底栏/悬停提示的按键展示即时刷新。
+    @ObservedObject private var config = ConfigStore.shared
 
     @State private var speechRate: Float = ConfigStore.shared.current.tts.speechRate
     @State private var showSpeed = false
@@ -532,7 +576,10 @@ struct InputPanelView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 132)
-            .help("切换展示模式：简洁为双栏实时翻译，详细为逐句对照（⌘1 / ⌘2）")
+            .help(TLKitLocalization.format(
+                "切换展示模式：简洁为双栏实时翻译，详细为逐句对照（%@ / %@）",
+                ConfigStore.shared.current.panelSimpleModeHotkey.displayString,
+                ConfigStore.shared.current.panelDetailedModeHotkey.displayString))
             .accessibilityLabel("展示模式")
         }
         // 上提到与左上角红色关闭键同一水平线，消除标题栏死空间；左侧让位关闭键。
@@ -610,7 +657,7 @@ struct InputPanelView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(controller.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .help("朗读原文")
+                .help(TLKitLocalization.format("朗读原文（%@）", ConfigStore.shared.current.panelSpeakSourceHotkey.displayString))
                 .accessibilityLabel("朗读原文")
 
                 Spacer()
@@ -873,7 +920,11 @@ struct InputPanelView: View {
             Spacer()
             // 快捷键只留不可发现的：朗读/清空的快捷键在各自按钮悬停提示里，
             // ⌘Enter 因实时自动翻译近乎冗余（功能保留，不占提示位）。
-            Text("⌘1/⌘2 切换模式 · Esc/⌘W 关闭")
+            // 模式切换键可自定义，这里读配置动态展示。
+            Text(TLKitLocalization.format(
+                "%@/%@ 切换模式 · Esc/⌘W 关闭",
+                ConfigStore.shared.current.panelSimpleModeHotkey.displayString,
+                ConfigStore.shared.current.panelDetailedModeHotkey.displayString))
                 .font(TLStyle.footnote)
                 .foregroundStyle(.tertiary)
         }

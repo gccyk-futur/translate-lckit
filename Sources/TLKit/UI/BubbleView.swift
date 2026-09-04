@@ -17,10 +17,10 @@ enum BubbleState {
 struct BubbleView: View {
     let state: BubbleState
     var onOpenAccessibility: () -> Void = {}
-    /// 朗读原文回调（参数为原文文本）。
-    var onSpeak: ((String) -> Void)?
-    /// 「详细」回调：把原文送进翻译面板的逐句对照模式。
-    var onOpenDetailed: ((String) -> Void)?
+    /// 朗读回调（文本 + 语言码；语言码来自翻译状态，比再检测一次准）。
+    var onSpeak: ((String, String) -> Void)?
+    /// 「打开面板」回调：原文 + 译文（简洁模式直接复用译文，详情模式按原文重翻）。
+    var onOpenDetailed: ((String, String) -> Void)?
     /// 错误态「翻译设置…」回调。
     var onOpenSettings: (() -> Void)?
     /// 权限态「不再提醒」回调。
@@ -87,15 +87,23 @@ struct BubbleView: View {
                         .font(TLStyle.footnote)
                         .foregroundStyle(.tertiary)
                     Spacer()
-                    iconButton(systemName: "list.bullet.below.rectangle",
-                               label: TLKitLocalization.string("详细对照"),
-                               hint: TLKitLocalization.string("打开翻译面板，逐句对照原文与译文")) { onOpenDetailed?(source) }
+                    // 「打开面板」按钮：默认进逐句对照；设置里可改成简洁面板
+                    // （简洁模式直接带译文过去，不重复请求引擎）。文案随偏好切换。
+                    if ConfigStore.shared.current.bubbleOpensDetailed {
+                        iconButton(systemName: "list.bullet.below.rectangle",
+                                   label: TLKitLocalization.string("详细对照"),
+                                   hint: TLKitLocalization.string("打开翻译面板，逐句对照原文与译文")) { onOpenDetailed?(source, translation) }
+                    } else {
+                        iconButton(systemName: "rectangle.center.inset.filled",
+                                   label: TLKitLocalization.string("打开面板"),
+                                   hint: TLKitLocalization.string("打开翻译面板继续编辑或重翻")) { onOpenDetailed?(source, translation) }
+                    }
                     iconButton(systemName: "speedometer",
                                label: TLKitLocalization.string("朗读速度"),
                                hint: TLKitLocalization.string("展开或收起朗读速度调节条")) { showSpeed.toggle() }
                     iconButton(systemName: "speaker.wave.2",
-                               label: TLKitLocalization.string("朗读原文（空格）"),
-                               hint: TLKitLocalization.string("朗读翻译前的原文，快捷键空格")) { onSpeak?(source) }
+                               label: TLKitLocalization.string("朗读译文（空格）"),
+                               hint: TLKitLocalization.string("朗读译文；⇧空格朗读原文")) { onSpeak?(translation, targetLang) }
                     iconButton(systemName: "doc.on.doc",
                                label: TLKitLocalization.string("复制译文"),
                                hint: TLKitLocalization.string("将译文拷贝到剪贴板")) {
@@ -107,7 +115,7 @@ struct BubbleView: View {
                 // 快捷键小提示：居中胶囊 tag，「不再提示」仅指这条提示本身。
                 if !hintsSuppressed {
                     HStack(spacing: 6) {
-                        Text("空格 朗读 · Esc 关闭")
+                        Text("空格 译文 · ⇧空格 原文 · Esc 关闭")
                             .foregroundStyle(.tertiary)
                         Button("不再提示") {
                             hintsSuppressed = true
