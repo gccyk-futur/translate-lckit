@@ -150,6 +150,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(makeItem(TLKitLocalization.string("退出 TLKit"), action: #selector(confirmQuit), keyEquivalent: "q"))
         appMenuItem.submenu = appMenu
+        // 编辑菜单：⌘Z/⇧⌘Z/⌘X/⌘C/⌘V/⌘A。AppKit 的文本编辑快捷键全靠菜单项
+        // 走响应链下发，没有编辑菜单时密钥框等所有输入框都无法 ⌘V 粘贴。
+        let editMenuItem = NSMenuItem()
+        mainMenu.addItem(editMenuItem)
+        let editMenu = NSMenu(title: TLKitLocalization.string("编辑"))
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("撤销"), action: #selector(UndoManager.undo), keyEquivalent: "z"))
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("重做"), action: #selector(UndoManager.redo), keyEquivalent: "Z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("拷贝"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: TLKitLocalization.string("全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenuItem.submenu = editMenu
         // 窗口菜单：⌘W 关闭。target 留 nil 走响应链，由当前 key window 的 performClose: 接收。
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)

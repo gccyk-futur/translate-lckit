@@ -219,3 +219,10 @@
 "翻译引擎" = "Motor de tradução";
 "输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Idioma de destino do painel de entrada; o idioma de origem é detectado automaticamente e pode ser definido manualmente na barra superior";
 "窗口" = "Janela";
+"编辑" = "Editar";
+"撤销" = "Desfazer";
+"重做" = "Refazer";
+"剪切" = "Recortar";
+"拷贝" = "Copiar";
+"粘贴" = "Colar";
+"全选" = "Selecionar Tudo";

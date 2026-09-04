@@ -219,3 +219,10 @@
 "翻译引擎" = "Motor de traducción";
 "输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Idioma de destino del panel de entrada; el idioma de origen se detecta automáticamente y puede ajustarse manualmente en la barra superior";
 "窗口" = "Ventana";
+"编辑" = "Edición";
+"撤销" = "Deshacer";
+"重做" = "Rehacer";
+"剪切" = "Cortar";
+"拷贝" = "Copiar";
+"粘贴" = "Pegar";
+"全选" = "Seleccionar todo";

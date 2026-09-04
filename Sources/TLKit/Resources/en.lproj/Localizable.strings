@@ -219,3 +219,10 @@
 "翻译引擎" = "Translation Engine";
 "输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Target language for the input panel; the source language is auto-detected and can be set manually in the panel's top bar";
 "窗口" = "Window";
+"编辑" = "Edit";
+"撤销" = "Undo";
+"重做" = "Redo";
+"剪切" = "Cut";
+"拷贝" = "Copy";
+"粘贴" = "Paste";
+"全选" = "Select All";

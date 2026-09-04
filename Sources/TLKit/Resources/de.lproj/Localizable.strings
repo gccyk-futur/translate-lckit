@@ -219,3 +219,10 @@
 "翻译引擎" = "Übersetzungs-Engine";
 "输入面板的目标语言；源语言默认自动检测，可在面板顶栏手动指定" = "Zielsprache des Eingabepanels; die Ausgangssprache wird automatisch erkannt und kann in der Panelleiste manuell gesetzt werden";
 "窗口" = "Fenster";
+"编辑" = "Bearbeiten";
+"撤销" = "Widerrufen";
+"重做" = "Wiederholen";
+"剪切" = "Ausschneiden";
+"拷贝" = "Kopieren";
+"粘贴" = "Einsetzen";
+"全选" = "Alles auswählen";
