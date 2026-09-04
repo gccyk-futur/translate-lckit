@@ -35,9 +35,12 @@ final class TLKitTests: XCTestCase {
 
     func testAppConfigCodableRoundTrip() throws {
         var config = AppConfig()
-        config.hotkey = Shortcut(keyCode: 5, carbonModifiers: 0x1000)
+        config.translateTargets = [
+            TranslateTarget(id: TranslateTarget.defaultSlotID, language: "en", hotkey: .default),
+            TranslateTarget(language: "ja", hotkey: Shortcut(keyCode: 5, carbonModifiers: 0x1000)),
+        ]
         config.autoDismissSeconds = 15
-        config.targetLanguage = "en"
+        config.panelSpeakHotkey = Shortcut(keyCode: 15, carbonModifiers: 0x900)
         config.baidu.apiKey = "test-api-key"
 
         let data = try JSONEncoder().encode(config)
@@ -48,7 +51,9 @@ final class TLKitTests: XCTestCase {
     /// 缺字段的旧配置文件应回退默认值而不是解析失败。
     func testAppConfigToleratesMissingFields() throws {
         let decoded = try JSONDecoder().decode(AppConfig.self, from: Data("{}".utf8))
-        XCTAssertEqual(decoded.hotkey, .default)
+        XCTAssertEqual(decoded.translateTargets.count, 1)
+        XCTAssertEqual(decoded.defaultTargetLanguage, "zh")
+        XCTAssertEqual(decoded.translateTargets[0].hotkey, .default)
         XCTAssertEqual(decoded.autoDismissSeconds, 8)
         XCTAssertEqual(decoded.service, .system)
         XCTAssertEqual(decoded.historyMaxCount, 500)
@@ -73,6 +78,42 @@ final class TLKitTests: XCTestCase {
         XCTAssertEqual(trimmed.map(\.sourceText), ["s0", "s1", "s2"]) // items[0] 为最新（头插）
         XCTAssertEqual(HistoryStore.trimmed(items, maxCount: 0).count, 10) // 非法上限不裁剪
         XCTAssertEqual(HistoryStore.trimmed(items, maxCount: 100).count, 10)
+    }
+
+    // MARK: - 历史条目星标与解读
+
+    /// 老 history.json 没有 isStarred / interpretation 字段，解码必须回退默认值。
+    func testHistoryItemDecodeToleratesMissingStarFields() throws {
+        let json = #"[{"id":"00000000-0000-0000-0000-000000000001","date":"2026-09-04T10:00:00Z","sourceText":"hello","resultText":"你好","targetLang":"zh","service":"系统翻译"}]"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let items = try decoder.decode([HistoryItem].self, from: Data(json.utf8))
+        XCTAssertEqual(items.count, 1)
+        XCTAssertFalse(items[0].isStarred)
+        XCTAssertNil(items[0].interpretation)
+    }
+
+    /// 星标与解读要随编码/解码完整保留。
+    func testHistoryItemStarRoundTrip() throws {
+        var item = HistoryItem(sourceText: "hello", resultText: "你好", targetLang: "zh", service: "系统翻译")
+        item.isStarred = true
+        item.interpretation = "【释义】你好"
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode([item])
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode([HistoryItem].self, from: data)
+        let decodedItem = try XCTUnwrap(decoded.first)
+        XCTAssertEqual(decodedItem.id, item.id)
+        // iso8601 默认丢毫秒，日期按秒级精度比较。
+        XCTAssertEqual(decodedItem.date.timeIntervalSince1970, item.date.timeIntervalSince1970, accuracy: 1)
+        XCTAssertEqual(decodedItem.sourceText, item.sourceText)
+        XCTAssertEqual(decodedItem.resultText, item.resultText)
+        XCTAssertEqual(decodedItem.targetLang, item.targetLang)
+        XCTAssertEqual(decodedItem.service, item.service)
+        XCTAssertTrue(decodedItem.isStarred)
+        XCTAssertEqual(decodedItem.interpretation, "【释义】你好")
     }
 
     // MARK: - OpenAI 协议端点归一化

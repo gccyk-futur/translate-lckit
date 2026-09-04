@@ -76,7 +76,7 @@ private final class SettingsPolicyDelegate: NSObject, NSWindowDelegate {
 
 /// 设置页签（侧边栏导航项）。
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, translation, services, voiceHistory, privacy, about
+    case general, translation, services, voice, history, privacy, about
 
     var id: String { rawValue }
 
@@ -85,7 +85,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return TLKitLocalization.string("通用")
         case .translation: return TLKitLocalization.string("翻译设置")
         case .services: return TLKitLocalization.string("翻译引擎")
-        case .voiceHistory: return TLKitLocalization.string("语音与历史")
+        case .voice: return TLKitLocalization.string("语音")
+        case .history: return TLKitLocalization.string("历史与统计")
         case .privacy: return TLKitLocalization.string("隐私")
         case .about: return TLKitLocalization.string("关于")
         }
@@ -96,7 +97,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .translation: return "character.bubble"
         case .services: return "character.book.closed"
-        case .voiceHistory: return "speaker.wave.2"
+        case .voice: return "speaker.wave.2"
+        case .history: return "clock.arrow.circlepath"
         case .privacy: return "hand.raised"
         case .about: return "info.circle"
         }
@@ -178,7 +180,8 @@ struct SettingsView: View {
         case .general: generalPane
         case .translation: translationPane
         case .services: servicesPane
-        case .voiceHistory: voiceHistoryPane
+        case .voice: voicePane
+        case .history: historyPane
         case .privacy: privacyPane
         case .about: aboutPane
         }
@@ -628,7 +631,7 @@ struct SettingsView: View {
         }
     }
 
-    private var voiceHistoryPane: some View {
+    private var voicePane: some View {
         Form {
             Section("朗读引擎") {
                 Picker("引擎", selection: Binding(
@@ -720,6 +723,14 @@ struct SettingsView: View {
                 }
             }
 
+        }
+        .formStyle(.grouped)
+    }
+
+    /// 历史与统计页：保留策略 + 从现有历史推导的统计（不新增埋点）+ JSON/CSV 导出。
+    private var historyPane: some View {
+        let stats = history.stats
+        return Form {
             Section("历史") {
                 Picker("历史保留", selection: Binding(
                     get: { config.current.historyMaxCount },
@@ -746,8 +757,92 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section("统计") {
+                LabeledContent("累计", value: TLKitLocalization.format("%lld 条", stats.total))
+                LabeledContent("今日", value: TLKitLocalization.format("%lld 条", stats.today))
+                LabeledContent("本月", value: TLKitLocalization.format("%lld 条", stats.thisMonth))
+                LabeledContent("星标", value: TLKitLocalization.format("%lld 条", stats.starred))
+            }
+
+            if !stats.byService.isEmpty {
+                Section("按引擎") {
+                    ForEach(stats.byService, id: \.name) { entry in
+                        LabeledContent(entry.name) {
+                            Text(TLKitLocalization.format("%lld 条", entry.count))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            if !stats.byTargetLanguage.isEmpty {
+                Section("按目标语言") {
+                    ForEach(stats.byTargetLanguage, id: \.code) { entry in
+                        LabeledContent(LanguageCatalog.name(for: entry.code)) {
+                            Text(TLKitLocalization.format("%lld 条", entry.count))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section("导出") {
+                HStack(spacing: 12) {
+                    Button("导出 JSON…") { exportHistory(format: .json) }
+                        .controlSize(.small)
+                        .disabled(history.items.isEmpty)
+                    Button("导出 CSV…") { exportHistory(format: .csv) }
+                        .controlSize(.small)
+                        .disabled(history.items.isEmpty)
+                }
+                if let exportMessage {
+                    Text(exportMessage)
+                        .font(.caption)
+                        .foregroundStyle(exportMessage.hasPrefix("✓") ? Color.secondary : Color.orange)
+                        .textSelection(.enabled)
+                }
+                Text("导出包含原文、译文、目标语言、引擎、时间与星标状态；CSV 可直接用 Excel 或 Numbers 打开。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+    }
+
+    // MARK: - 历史导出
+
+    @State private var exportMessage: String?
+
+    private enum HistoryExportFormat {
+        case json, csv
+    }
+
+    /// NSSavePanel 让用户自选位置；写入失败时内联提示。
+    private func exportHistory(format: HistoryExportFormat) {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        switch format {
+        case .json:
+            panel.nameFieldStringValue = "TLKit-history.json"
+        case .csv:
+            panel.nameFieldStringValue = "TLKit-history.csv"
+        }
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let data: Data?
+            switch format {
+            case .json: data = HistoryStore.shared.exportJSON()
+            case .csv: data = HistoryStore.shared.exportCSV()
+            }
+            do {
+                guard let data else { throw CocoaError(.fileWriteUnknown) }
+                try data.write(to: url, options: .atomic)
+                exportMessage = TLKitLocalization.format("✓ 已导出到 %@", url.lastPathComponent)
+            } catch {
+                exportMessage = TLKitLocalization.format("导出失败：%@", error.localizedDescription)
+            }
+        }
     }
 
     private var privacyPane: some View {

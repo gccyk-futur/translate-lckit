@@ -9,6 +9,11 @@ struct OpenAICompatibleTranslator: TranslationService {
     let model: String
 
     func translate(_ text: String, from source: String?, to target: String) async throws -> String {
+        try await chat(systemPrompt: Self.systemPrompt(from: source, to: target), user: text)
+    }
+
+    /// 通用对话入口：翻译与词典解读共用同一请求管线，只换提示词。
+    func chat(systemPrompt: String, user: String) async throws -> String {
         guard let url = Self.chatEndpoint(baseURL: baseURL) else {
             throw TranslationError.network(message: TLKitLocalization.format("%@ Base URL 无效", displayName))
         }
@@ -26,8 +31,8 @@ struct OpenAICompatibleTranslator: TranslationService {
             model: model,
             temperature: 0.3,
             messages: [
-                .init(role: "system", content: Self.systemPrompt(from: source, to: target)),
-                .init(role: "user", content: text),
+                .init(role: "system", content: systemPrompt),
+                .init(role: "user", content: user),
             ]
         )
         request.httpBody = try JSONEncoder().encode(payload)

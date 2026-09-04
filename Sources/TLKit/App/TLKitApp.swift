@@ -29,6 +29,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupMainMenu()
         TranslationController.shared.start()
         AppearanceManager.apply()
+        // macOS 14 刘海机缓解：菜单栏空间不足时系统把状态项静默泊到屏外
+        // （实机日志：button window x = -4448，isVisible 仍为 true，重建无用）。
+        // 启动 3 秒后检测一次：窗口中点不在任何屏幕内 → 打开一次设置窗口，
+        // 让用户知道 App 活着、可以从菜单栏之外的入口继续操作。每启动最多一次。
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            self.presentSettingsIfStatusItemOffscreen()
+        }
         #if DEBUG
         // 截图演示入口（仅 Debug）：TLKIT_DEMO=input / input-detailed / settings-<paneRawValue>
         if let demo = ProcessInfo.processInfo.environment["TLKIT_DEMO"] {
@@ -134,6 +142,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleScreenChange() {
         rebuildStatusItem()
+    }
+
+    /// 状态项窗口中点不在任何屏幕内 = 被系统泊到屏外（macOS 14 菜单栏空间不足）。
+    /// 打开一次设置窗口作为「App 活着」的信号；对正常可见的状态项零影响。
+    private func presentSettingsIfStatusItemOffscreen() {
+        guard let window = statusItem?.button?.window else { return }
+        let center = CGPoint(x: window.frame.midX, y: window.frame.midY)
+        let onScreen = NSScreen.screens.contains { $0.frame.contains(center) }
+        if !onScreen {
+            print("[TLKit] 状态项窗口位于所有屏幕之外（\(window.frame)），打开设置窗口提示")
+            SettingsWindow.present()
+        }
     }
 
     private func rebuildStatusItem() {
