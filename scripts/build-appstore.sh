@@ -18,8 +18,10 @@ BUILD_DIR="./build"
 ARCHIVE_PATH="${BUILD_DIR}/${APP_NAME}.xcarchive"
 PKG_PATH="${BUILD_DIR}/${APP_NAME}.pkg"
 
-TEAM_ID="$(op read op://My-Keys/apple/TEAM_ID)"
-SIGNING_NAME="$(op read op://My-Keys/apple/SIGNING_NAME)"
+# 开发者身份：优先取环境变量（APPLE_DEV_TEAM_ID / APPLE_DEV_SIGING_NAME，zshrc 注入）；
+# 未注入时回退 1Password CLI（非交互 shell 下 op 授权会超时，环境变量是主路径）。
+TEAM_ID="${APPLE_DEV_TEAM_ID:-$(op read op://My-Keys/apple/TEAM_ID)}"
+SIGNING_NAME="${APPLE_DEV_SIGING_NAME:-$(op read op://My-Keys/apple/SIGNING_NAME)}"
 export TLKIT_TEAM_ID="${TEAM_ID}"
 export TLKIT_SIGNING_NAME="${SIGNING_NAME}"
 # Mac App Store 应用签名专用证书（与 Installer 证书区分，避免导出时误选）

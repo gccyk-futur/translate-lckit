@@ -168,8 +168,8 @@ struct TTSConfig: Codable, Equatable {
 
 /// 翻译目标条目：「翻译为」清单中的一行。
 /// 清单第 1 条是固定默认槽（稳定 ID、不可删）：输入面板、状态栏快切、
-/// 历史「重新翻译」等无快捷键上下文都以它为目标语言；其余条目是快捷键预设，
-/// 「设为默认」= 把本条语言写进默认槽（不给本条打标记，避免歧义）。
+/// 历史「重新翻译」等无快捷键上下文都以它为目标语言，改默认语言直接编辑它；
+/// 其余条目是快捷键预设。
 struct TranslateTarget: Codable, Equatable, Identifiable {
     /// 默认槽（清单第 1 条）的稳定 ID。
     static let defaultSlotID = "default"
@@ -349,7 +349,7 @@ final class ConfigStore: ObservableObject {
         save()
     }
 
-    /// 改写默认槽语言：状态栏「翻译为」快切、面板顶栏、「设为默认」共用入口。
+    /// 改写默认槽语言：状态栏「翻译为」快切、面板顶栏共用入口。
     func setDefaultTargetLanguage(_ language: String) {
         update { config in
             if config.translateTargets.isEmpty {

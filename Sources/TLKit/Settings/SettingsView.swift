@@ -436,8 +436,8 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    /// 「翻译为」清单行：语言选择 + 快捷键录制（可清空）+ 设为默认 / 删除。
-    /// 第 1 行是默认槽：带「默认」徽标，不可删除、不提供「设为默认」。
+    /// 「翻译为」清单行：语言选择 + 快捷键录制（可清空）+ 删除。
+    /// 第 1 行是默认槽：带「默认」徽标，不可删除；默认语言直接在第 1 行改。
     @ViewBuilder
     private func targetRow(index: Int, target: TranslateTarget) -> some View {
         HStack(spacing: 8) {
@@ -491,8 +491,6 @@ struct SettingsView: View {
             }
 
             if index > 0 {
-                Button("设为默认") { makeDefault(target) }
-                    .controlSize(.small)
                 Button(role: .destructive) { removeTarget(id: target.id) } label: {
                     Image(systemName: "trash")
                 }
@@ -510,11 +508,6 @@ struct SettingsView: View {
             guard let index = config.translateTargets.firstIndex(where: { $0.id == id }) else { return }
             mutate(&config.translateTargets[index])
         }
-    }
-
-    /// 「设为默认」= 把该条语言写进默认槽（第 1 条），本条保持不变。
-    private func makeDefault(_ target: TranslateTarget) {
-        ConfigStore.shared.setDefaultTargetLanguage(target.language)
     }
 
     private func removeTarget(id: String) {
