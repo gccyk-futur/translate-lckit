@@ -309,8 +309,8 @@ struct SettingsView: View {
                 }
             }
             #else
-            // 彩蛋：商店版按审核条款 2.4.5 不使用辅助功能；
-            // 若用户自行在系统设置中授权，仅展示说明与致敬（只读检测，不请求、不启用任何功能）。
+            // 彩蛋：商店版按审核条款 2.4.5 不申请、不引导辅助功能权限；
+            // 若用户自行在系统设置中授权，则划词翻译随之解锁（只读检测，确认状态即可）。
             if accessibilityGranted {
                 Section("彩蛋") {
                     HStack(alignment: .top) {
@@ -319,7 +319,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("发现高级玩家")
                                 .font(.system(size: 13))
-                            Text("你已在系统设置中授予辅助功能权限。受 App Store 沙箱限制，商店版不包含划词翻译功能；想要「选中即译」的完整体验，可使用官网渠道版，或从开源社区获取源码自行编译。")
+                            Text("你已在系统设置中授予辅助功能权限，划词翻译已解锁：选中文字按快捷键即译（若未生效请重启 TLKit）。TLKit 不申请也不引导该权限，这完全来自你自己的设置；在系统设置中撤销后自动恢复为输入面板方式。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Link("了解完整体验与开源社区", destination: URL(string: "https://ckai.me/tlkit/support.html")!)

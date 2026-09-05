@@ -52,7 +52,7 @@
 "仅看星标" = "Favoris uniquement";
 "仅看星标（词典条目）" = "Afficher uniquement les favoris (entrées du dictionnaire)";
 "今日" = "Aujourd'hui";
-"你已在系统设置中授予辅助功能权限。受 App Store 沙箱限制，商店版不包含划词翻译功能；想要「选中即译」的完整体验，可使用官网渠道版，或从开源社区获取源码自行编译。" = "Vous avez accordé l'accès Accessibilité dans les Réglages Système. En raison du sandbox de l'App Store, la version du store n'inclut pas la traduction de la sélection ; pour l'expérience complète « sélectionner pour traduire », utilisez la version du site officiel, ou compilez vous-même le code open source.";
+"你已在系统设置中授予辅助功能权限，划词翻译已解锁：选中文字按快捷键即译（若未生效请重启 TLKit）。TLKit 不申请也不引导该权限，这完全来自你自己的设置；在系统设置中撤销后自动恢复为输入面板方式。" = "Vous avez accordé l'autorisation Accessibilité dans Réglages Système : la traduction de sélection est débloquée — sélectionnez du texte et appuyez sur le raccourci pour traduire (si cela ne prend pas effet, redémarrez TLKit). TLKit ne demande ni ne suggère cette autorisation ; c'est entièrement votre choix. Révoquez-la dans Réglages Système pour revenir au panneau de saisie.";
 "俄语" = "Russe";
 "全局朗读速度，气泡与翻译面板中的调节与此同源" = "Vitesse de lecture globale ; les réglages de la bulle et du panneau de traduction partagent cette valeur";
 "全选" = "Tout sélectionner";

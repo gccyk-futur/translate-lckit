@@ -52,7 +52,7 @@
 "仅看星标" = "Somente com estrela";
 "仅看星标（词典条目）" = "Mostrar apenas com estrela (entradas do dicionário)";
 "今日" = "Hoje";
-"你已在系统设置中授予辅助功能权限。受 App Store 沙箱限制，商店版不包含划词翻译功能；想要「选中即译」的完整体验，可使用官网渠道版，或从开源社区获取源码自行编译。" = "Você concedeu acesso de Acessibilidade nos Ajustes do Sistema. Devido à sandbox da App Store, a versão da loja não inclui a tradução de texto selecionado; para a experiência completa de «selecionar e traduzir», use a versão do site oficial ou compile você mesmo o código aberto.";
+"你已在系统设置中授予辅助功能权限，划词翻译已解锁：选中文字按快捷键即译（若未生效请重启 TLKit）。TLKit 不申请也不引导该权限，这完全来自你自己的设置；在系统设置中撤销后自动恢复为输入面板方式。" = "Você concedeu a permissão de Acessibilidade nos Ajustes do Sistema — a tradução de seleção está desbloqueada: selecione o texto e pressione o atalho para traduzir (se não funcionar, reinicie o TLKit). O TLKit não solicita nem sugere essa permissão; é inteiramente uma escolha sua. Revogue-a nos Ajustes do Sistema para voltar ao painel de entrada.";
 "俄语" = "Russo";
 "全局朗读速度，气泡与翻译面板中的调节与此同源" = "Velocidade de leitura global; os controles no balão e no painel de tradução compartilham este ajuste";
 "全选" = "Selecionar Tudo";

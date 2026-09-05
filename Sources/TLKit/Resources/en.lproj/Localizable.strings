@@ -52,7 +52,7 @@
 "仅看星标" = "Starred Only";
 "仅看星标（词典条目）" = "Show only starred (dictionary entries)";
 "今日" = "Today";
-"你已在系统设置中授予辅助功能权限。受 App Store 沙箱限制，商店版不包含划词翻译功能；想要「选中即译」的完整体验，可使用官网渠道版，或从开源社区获取源码自行编译。" = "You've granted Accessibility access in System Settings. Due to App Store sandboxing, the store build doesn't include select-to-translate. For the full experience, use the build from the official website, or compile the open-source code yourself.";
+"你已在系统设置中授予辅助功能权限，划词翻译已解锁：选中文字按快捷键即译（若未生效请重启 TLKit）。TLKit 不申请也不引导该权限，这完全来自你自己的设置；在系统设置中撤销后自动恢复为输入面板方式。" = "You've granted Accessibility permission in System Settings — selection translation is unlocked: select text and press the hotkey to translate (restart TLKit if it doesn't take effect). TLKit never requests or prompts for this permission; it's entirely your own choice. Revoke it in System Settings to return to the input panel.";
 "俄语" = "Russian";
 "全局朗读速度，气泡与翻译面板中的调节与此同源" = "Global speaking rate; the controls in the bubble and translation panel share this setting";
 "全选" = "Select All";

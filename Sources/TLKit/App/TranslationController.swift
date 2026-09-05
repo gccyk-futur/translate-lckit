@@ -8,10 +8,9 @@ final class TranslationController: ObservableObject {
 
     private let hotkeyManager = HotkeyManager()
     private let bubble = BubblePanelController()
-    #if !APP_STORE
-    // 模拟 ⌘C 取词仅直装版使用；App Store 版快捷键直接打开输入面板。
+    // 取词器两个渠道都编译：官网版常规使用；App Store 版仅在用户自行授予
+    // 辅助功能权限后启用（彩蛋能力，不申请、不引导，见 run() 内分支）。
     private let selectionReader = SelectionReaderFactory.make()
-    #endif
     private var activeTask: Task<Void, Never>?
 
     private init() {}
@@ -96,15 +95,18 @@ final class TranslationController: ObservableObject {
             text = presetText
         } else {
             #if APP_STORE
-            // App Store 版不申请辅助功能权限（审核条款 2.4.5 禁止将 Accessibility
-            // 用于无障碍之外的用途）：快捷键直接打开输入面板，用户粘贴/输入待翻译文本。
-            // 预设条目的热键 = 先把该条语言写进默认槽，再呼出面板。
-            if let targetOverride,
-               targetOverride != ConfigStore.shared.current.defaultTargetLanguage {
-                ConfigStore.shared.setDefaultTargetLanguage(targetOverride)
+            // App Store 版默认不使用辅助功能权限（审核条款 2.4.5）：快捷键直接打开输入面板。
+            // 彩蛋能力：用户自行在系统设置授予权限后，落入与官网版一致的取词路径。
+            // 不弹系统授权窗、UI 不做任何引导——授权纯属用户自身行为。
+            guard PermissionGate.ensureAccessibility(prompt: false) else {
+                // 预设条目的热键 = 先把该条语言写进默认槽，再呼出面板。
+                if let targetOverride,
+                   targetOverride != ConfigStore.shared.current.defaultTargetLanguage {
+                    ConfigStore.shared.setDefaultTargetLanguage(targetOverride)
+                }
+                InputPanelController.shared.show()
+                return
             }
-            InputPanelController.shared.show()
-            return
             #else
             // CGEvent.post() 需要 PostEvent 权限（系统设置 → 辅助功能）。
             // 不用系统授权弹窗（prompt: false）：那东西语气强硬还会和我们的气泡
@@ -118,6 +120,7 @@ final class TranslationController: ObservableObject {
                 }
                 return
             }
+            #endif
 
             // 150ms 宽限的即时反馈：AX 直读通常几十毫秒内返回，不弹气泡，
             // 避免无选中场景「气泡一闪而过再切输入面板」的视觉跳动；
@@ -140,7 +143,6 @@ final class TranslationController: ObservableObject {
 
             truncated = raw.count > 3000
             text = String(raw.prefix(3000))
-            #endif
         }
         bubble.show(.loading(source: text), at: mouse)
 
